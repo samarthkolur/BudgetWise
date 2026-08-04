@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+#
+# Slow gate. Everything that is too expensive to run on every commit but too
+# important to discover in CI.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+APP="$ROOT/app"
+FAILED=0
+
+red()   { printf '\033[31m✗ %s\033[0m\n' "$*"; }
+green() { printf '\033[32m✓ %s\033[0m\n' "$*"; }
+warn()  { printf '\033[33m! %s\033[0m\n' "$*"; }
+
+# ---------------------------------------------------------------------------
+# 1. The Dart suite. Domain logic is pure and needs no database, so this is
+#    fast enough to be unconditional.
+# ---------------------------------------------------------------------------
+if (cd "$APP" && flutter test >/tmp/bw_test.log 2>&1); then
+  green "flutter test — $(grep -oE '\+[0-9]+' /tmp/bw_test.log | tail -1 | tr -d '+') passing"
+else
+  red "flutter test"
+  grep -E '^(\s+)?(Expected|Actual|FAILED|.*\[E\])' /tmp/bw_test.log | head -20
+  FAILED=1
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Environment files must not be tracked at all — regardless of contents.
+#
+#    This is the arm .gitleaks.toml cannot cover: the allowlist there exists so
+#    a filled-in local config does not fail the working-tree scan on every
+#    machine. Tracking is a separate question from content, and it is checked
+#    here so a `git add -f` cannot pass every local gate and only surface after
+#    the push.
+# ---------------------------------------------------------------------------
+TRACKED_ENV="$(git ls-files -- 'app/config/*.json' | grep -v 'app/config/example.json' || true)"
+if [[ -n "$TRACKED_ENV" ]]; then
+  red "environment config is tracked:"
+  echo "$TRACKED_ENV" | sed 's/^/    /'
+  FAILED=1
+else
+  green "no tracked environment config"
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Full-history secret scan. `gitleaks protect --staged` in pre-commit only
+#    sees the current change; this sees everything that has ever been committed.
+# ---------------------------------------------------------------------------
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks detect --no-banner --redact --config "$ROOT/.gitleaks.toml" >/tmp/bw_leaks_full.log 2>&1; then
+    green "history clean of secrets"
+  else
+    red "gitleaks found a secret in history"
+    grep -E 'Description|File|Commit' /tmp/bw_leaks_full.log | head -20
+    FAILED=1
+  fi
+else
+  warn "gitleaks not on PATH — history scan skipped"
+fi
+
+# ---------------------------------------------------------------------------
+# 4. The database suite. Skipped with a warning rather than a failure when
+#    Docker is unavailable: a contributor without Docker should still be able to
+#    push a Dart-only change, and CI runs this on every PR regardless.
+# ---------------------------------------------------------------------------
+if [[ -n "${SKIP_DB_TESTS:-}" ]]; then
+  warn "database suite skipped (SKIP_DB_TESTS set)"
+elif ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+  warn "docker unavailable — database suite skipped (CI still runs it)"
+elif git diff --name-only "@{push}..HEAD" 2>/dev/null | grep -q '^supabase/' \
+     || ! git rev-parse '@{push}' >/dev/null 2>&1; then
+  # Only when this push actually touches the schema, or on a first push where
+  # there is no upstream to compare against.
+  if "$ROOT/scripts/test_db.sh" >/tmp/bw_db.log 2>&1; then
+    green "database suite — $(grep -c 'PASS' /tmp/bw_db.log) assertions"
+  else
+    red "database suite"
+    tail -20 /tmp/bw_db.log
+    FAILED=1
+  fi
+else
+  green "schema unchanged — database suite not needed"
+fi
+
+if [[ $FAILED -ne 0 ]]; then
+  printf '\n\033[31mpre-push failed.\033[0m\n'
+  exit 1
+fi
+
+exit 0

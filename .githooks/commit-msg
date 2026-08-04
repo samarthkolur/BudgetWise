@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# Conventional Commits, validated in pure shell.
+#
+# Not commitlint: that would pull Node and a node_modules tree into a Flutter
+# repository to check a regex, and add a network install to every fresh
+# checkout. The rules below are the whole config, readable in one screen.
+set -uo pipefail
+
+MSG_FILE="$1"
+SUBJECT="$(head -1 "$MSG_FILE")"
+
+# Merge, revert and fixup commits are generated, not authored.
+case "$SUBJECT" in
+  "Merge "*|"Revert "*|"fixup!"*|"squash!"*) exit 0 ;;
+esac
+
+TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+
+# Scopes are the feature and layer names, so history stays greppable per module.
+# Adding one here is a deliberate act: it means a new area of the codebase
+# exists.
+SCOPES="money|time|budget|db|auth|onboarding|dashboard|expenses|ledger|goals|insights|investing|export|settings|core|router|theme|scaffold|deps|hooks|ci|docs"
+
+red() { printf '\033[31m✗ %s\033[0m\n' "$*"; }
+
+if [[ ${#SUBJECT} -gt 72 ]]; then
+  red "commit subject is ${#SUBJECT} characters; keep it under 72"
+  echo "    $SUBJECT"
+  exit 1
+fi
+
+if ! [[ "$SUBJECT" =~ ^($TYPES)(\(($SCOPES)\))?!?:\ .+ ]]; then
+  red "commit message does not follow Conventional Commits"
+  echo
+  echo "    got:      $SUBJECT"
+  echo "    expected: <type>(<scope>): <subject>"
+  echo
+  echo "    types:  ${TYPES//|/, }"
+  echo "    scopes: ${SCOPES//|/, }"
+  echo
+  echo "    e.g. feat(dashboard): safe-to-spend header"
+  exit 1
+fi
+
+# The subject is a sentence fragment completing "this commit will…", so a
+# trailing full stop is noise.
+if [[ "$SUBJECT" =~ \.$ ]]; then
+  red "drop the trailing full stop from the subject"
+  exit 1
+fi
+
+exit 0

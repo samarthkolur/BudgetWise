@@ -1,0 +1,81 @@
+title = "BudgetWise secret scanning"
+
+[extend]
+useDefault = true
+
+# ---------------------------------------------------------------------------
+# Rules the defaults do not cover, for the credential shapes this project
+# actually handles.
+# ---------------------------------------------------------------------------
+
+[[rules]]
+id = "supabase-service-role-jwt"
+description = "Supabase service_role key (bypasses RLS entirely)"
+# A service-role JWT is a normal JWT whose payload carries the role claim. It
+# is the single most damaging credential in this project: it ignores every
+# policy in supabase/migrations, so a leak is a full data breach rather than a
+# rotation chore. It belongs in Edge Function secrets and nowhere else.
+regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|InNlcnZpY2Vfcm9sZSI)[A-Za-z0-9_-]*\.[A-Za-z0-9_-]{10,}'''
+keywords = ["eyj", "service_role"]
+
+[[rules]]
+id = "supabase-access-token"
+description = "Supabase personal access token"
+regex = '''sbp_[a-f0-9]{40,}'''
+keywords = ["sbp_"]
+
+[[rules]]
+id = "google-oauth-client-secret"
+description = "Google OAuth client secret"
+# The web client secret belongs in the Supabase dashboard only. The Android and
+# iOS client IDs are not secrets and are expected in app/config/*.json.
+regex = '''GOCSPX-[a-zA-Z0-9_-]{20,}'''
+keywords = ["gocspx-"]
+
+[[rules]]
+id = "google-oauth-client-secret-json"
+description = "Google client_secret.json contents"
+regex = '''"client_secret"\s*:\s*"[a-zA-Z0-9_-]{16,}"'''
+keywords = ["client_secret"]
+
+[[rules]]
+id = "android-keystore-password"
+description = "Android signing credential in a properties file"
+regex = '''(?i)(storePassword|keyPassword|keyAlias)\s*=\s*['"]?[^\s'"$#]{6,}'''
+keywords = ["storepassword", "keypassword"]
+
+[allowlist]
+description = "Paths and shapes that are not secrets"
+
+paths = [
+  # Local environment config. The working-tree scan (`gitleaks detect --no-git`)
+  # walks the filesystem and does not consult .gitignore, so without this the
+  # gate fails on every machine that has a filled-in config — and a gate that
+  # always fails is a gate people stop reading.
+  #
+  # "config must never be tracked" is a different question from "config must not
+  # contain secrets", and it is owned by the pre-push hook, which fails on the
+  # file being tracked at all regardless of contents. Both arms are needed;
+  # neither substitutes for the other.
+  '''app/config/dev\.json''',
+  '''app/config/staging\.json''',
+  '''app/config/prod\.json''',
+  '''app/android/key\.properties''',
+  '''app/ios/Runner/GoogleService-Info\.plist''',
+  '''app/android/app/google-services\.json''',
+
+  # Lockfiles are full of base64-looking hashes.
+  '''app/pubspec\.lock''',
+]
+
+regexes = [
+  # Placeholder values in the committed example config. Enumerated rather than
+  # allowlisting example.json wholesale, so a real value pasted into it is still
+  # caught.
+  '''YOUR_[A-Z_]+_HERE''',
+  '''<[a-z-]+>\.supabase\.co''',
+  '''\.apps\.googleusercontent\.com''',
+
+  # The test fixtures' UUIDs.
+  '''[0-9]{8}-[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{12}''',
+]

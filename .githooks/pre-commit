@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+#
+# Fast gate. Staged files only, target 3-8 seconds.
+#
+# Tests and the database suite deliberately live in pre-push instead: a slow
+# pre-commit hook is a hook people disable, and a disabled gate protects
+# nothing. CI runs everything unconditionally, so skipping here with
+# `git commit --no-verify` defers a failure rather than avoiding one.
+set -uo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+APP="$ROOT/app"
+FAILED=0
+
+red()   { printf '\033[31m✗ %s\033[0m\n' "$*"; }
+green() { printf '\033[32m✓ %s\033[0m\n' "$*"; }
+warn()  { printf '\033[33m! %s\033[0m\n' "$*"; }
+
+staged() { git diff --cached --name-only --diff-filter=ACMR -- "$@"; }
+
+mapfile -t DART_FILES < <(staged '*.dart' | grep -v '\.g\.dart$' | grep -v '\.freezed\.dart$' || true)
+
+# ---------------------------------------------------------------------------
+# 1. Formatting. Rewrites and re-stages rather than merely complaining — the
+#    fix is mechanical and there is nothing to review in it.
+# ---------------------------------------------------------------------------
+if [[ ${#DART_FILES[@]} -gt 0 ]]; then
+  REL_FILES=()
+  for f in "${DART_FILES[@]}"; do REL_FILES+=("$ROOT/$f"); done
+
+  if dart format --output=write "${REL_FILES[@]}" >/dev/null 2>&1; then
+    git add -- "${DART_FILES[@]}"
+    green "format"
+  else
+    red "format failed — is dart on PATH?"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Static analysis. Whole-project, not per-file: an edit in one file breaks
+#    the analyzer in another, and a per-file check would miss exactly that.
+# ---------------------------------------------------------------------------
+if [[ ${#DART_FILES[@]} -gt 0 ]]; then
+  if (cd "$APP" && flutter analyze --no-pub --fatal-infos --fatal-warnings >/tmp/bw_analyze.log 2>&1); then
+    green "analyze"
+  else
+    red "analyze"
+    grep -E '^\s+(info|warning|error)' /tmp/bw_analyze.log | head -20
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Generated files must match their sources. A build that only works after
+#    someone remembers to run codegen is not a build.
+# ---------------------------------------------------------------------------
+mapfile -t MODEL_FILES < <(staged 'app/lib/**/*.dart' || true)
+if [[ ${#MODEL_FILES[@]} -gt 0 ]] && grep -rlq "part '.*\.g\.dart'" "$APP/lib" 2>/dev/null; then
+  if (cd "$APP" && dart run build_runner build --delete-conflicting-outputs >/dev/null 2>&1); then
+    if ! git diff --quiet -- '*.g.dart' '*.freezed.dart'; then
+      red "generated files are stale — re-run codegen and stage the result"
+      git diff --name-only -- '*.g.dart' '*.freezed.dart' | sed 's/^/    /'
+      FAILED=1
+    else
+      green "codegen current"
+    fi
+  else
+    red "build_runner failed"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 4. Secrets. The service-role key bypasses RLS entirely, so a leak is a full
+#    data breach rather than a rotation chore.
+# ---------------------------------------------------------------------------
+if command -v gitleaks >/dev/null 2>&1; then
+  if gitleaks protect --staged --redact --no-banner --config "$ROOT/.gitleaks.toml" >/tmp/bw_leaks.log 2>&1; then
+    green "secrets"
+  else
+    red "gitleaks found a secret in the staged changes"
+    grep -E 'Description|File|Line' /tmp/bw_leaks.log | head -20
+    FAILED=1
+  fi
+else
+  warn "gitleaks not on PATH — secret scan skipped (CI still runs it)"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Environment config must never be committed. The anon key is publishable,
+#    but environments have to stay swappable and secrets must not learn the
+#    habit of living in git.
+# ---------------------------------------------------------------------------
+BAD_ENV="$(staged 'app/config/*.json' | grep -v 'app/config/example.json' || true)"
+if [[ -n "$BAD_ENV" ]]; then
+  red "refusing to commit environment config:"
+  echo "$BAD_ENV" | sed 's/^/    /'
+  FAILED=1
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Applied migrations are immutable. Editing one means the database everybody
+#    else already built no longer matches the file that claims to have built it.
+# ---------------------------------------------------------------------------
+MODIFIED_MIGRATIONS="$(git diff --cached --name-only --diff-filter=M -- 'supabase/migrations/*.sql' || true)"
+if [[ -n "$MODIFIED_MIGRATIONS" ]]; then
+  red "applied migrations are immutable — add a new one instead:"
+  echo "$MODIFIED_MIGRATIONS" | sed 's/^/    /'
+  FAILED=1
+fi
+
+# ---------------------------------------------------------------------------
+# 7. No placeholders in app code. A control wired to nothing is the failure
+#    this gate exists to catch. Tests may say TODO; shipped screens may not.
+# ---------------------------------------------------------------------------
+mapfile -t LIB_FILES < <(staged 'app/lib/*' || true)
+if [[ ${#LIB_FILES[@]} -gt 0 ]]; then
+  HITS=""
+  for f in "${LIB_FILES[@]}"; do
+    [[ -f "$ROOT/$f" ]] || continue
+    if grep -nE '(TODO: implement|FIXME|throw UnimplementedError|// *placeholder)' "$ROOT/$f" >/dev/null 2>&1; then
+      HITS+="$(grep -nE '(TODO: implement|FIXME|throw UnimplementedError|// *placeholder)' "$ROOT/$f" | sed "s|^|    $f:|")"$'\n'
+    fi
+  done
+  if [[ -n "$HITS" ]]; then
+    red "placeholder found in app code:"
+    printf '%s' "$HITS"
+    FAILED=1
+  fi
+fi
+
+if [[ $FAILED -ne 0 ]]; then
+  printf '\n\033[31mpre-commit failed.\033[0m Fix the above, or use --no-verify and let CI catch it.\n'
+  exit 1
+fi
+
+exit 0
