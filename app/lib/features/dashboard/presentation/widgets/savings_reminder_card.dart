@@ -1,0 +1,118 @@
+import 'package:budgetwise/core/providers.dart';
+import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/features/budget/domain/models.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+/// The savings-transfer reminder, and its success state.
+///
+/// The PRD is explicit that this requires no bank integration: confirming is a
+/// statement by the user that they moved the money. The value is the habit of
+/// consciously moving it before spending starts, so the card stays visible for
+/// the whole month until confirmed, then becomes an acknowledgement rather than
+/// disappearing — the confirmation is worth seeing.
+class SavingsReminderCard extends ConsumerStatefulWidget {
+  const SavingsReminderCard({required this.summary, super.key});
+
+  final BudgetSummary summary;
+
+  @override
+  ConsumerState<SavingsReminderCard> createState() =>
+      _SavingsReminderCardState();
+}
+
+class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
+  bool _busy = false;
+
+  Future<void> _confirm() async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(budgetRepositoryProvider)
+          .confirmSavings(
+            budgetId: widget.summary.budgetId,
+            amount: widget.summary.savingsOutstanding,
+          );
+      ref.refreshBudgetData();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            const SnackBar(content: Text('Saved. That is the hard part done.')),
+          );
+      }
+    } on Object catch (error) {
+      if (mounted) showFailure(context, error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final summary = widget.summary;
+
+    if (summary.savingsTarget.isZero) return const SizedBox.shrink();
+
+    final isDone =
+        summary.isSavingsConfirmed || summary.savingsOutstanding.isZero;
+
+    return Card(
+      color: isDone
+          ? theme.colorScheme.secondaryContainer
+          : theme.colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Text(isDone ? '✅' : '🔔', style: const TextStyle(fontSize: 22)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isDone ? 'Savings moved' : 'Move your savings',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: isDone
+                          ? theme.colorScheme.onSecondaryContainer
+                          : theme.colorScheme.onTertiaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    isDone
+                        ? '${summary.savedActual.formatCompact()} set aside this month.'
+                        : '${summary.savingsOutstanding.formatCompact()} still to transfer.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: isDone
+                          ? theme.colorScheme.onSecondaryContainer
+                          : theme.colorScheme.onTertiaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (!isDone)
+              FilledButton(
+                onPressed: _busy ? null : _confirm,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(88, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                child: _busy
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Done'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
