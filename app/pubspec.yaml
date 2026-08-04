@@ -1,0 +1,55 @@
+name: budgetwise
+description: "BudgetWise — a personal finance companion built on Earn → Save → Invest → Spend."
+publish_to: "none"
+version: 0.1.0
+
+# Pinned to the Dart shipped with Flutter 3.35.6. Several packages in this tree
+# (riverpod_lint, riverpod_generator, the newest json_serializable) require Dart
+# >= 3.12 and are deliberately held back rather than upgrading the machine's
+# global Flutter, which other projects on this host share. Raise the floor and
+# the held-back constraints together, never one alone.
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Backend: database + auth are the same Supabase project.
+  supabase_flutter: ^2.16.0
+  google_sign_in: ^7.2.0
+
+  # State + routing
+  flutter_riverpod: ^3.3.2
+  go_router: ^17.2.3
+
+  # Models
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.9.0
+
+  # Presentation
+  fl_chart: ^1.2.0
+  intl: ^0.20.3
+
+  # Export: XLSX / CSV / PDF
+  excel: ^4.0.6
+  csv: ^6.0.0
+  pdf: ^3.12.0
+  share_plus: ^12.0.2
+  path_provider: ^2.1.5
+
+  collection: ^1.19.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  build_runner: ^2.4.13
+  freezed: ^3.0.0
+  json_serializable: ^6.9.0
+
+  very_good_analysis: ^9.0.0
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true

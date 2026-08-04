@@ -1,0 +1,32 @@
+include: package:very_good_analysis/analysis_options.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+    - "build/**"
+
+  errors:
+    invalid_annotation_target: ignore
+    missing_required_param: error
+    missing_return: error
+    dead_code: error
+    unused_import: error
+    unused_local_variable: error
+
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    # Off deliberately, with reasons.
+
+    # This is an application, not a published package. Doc comments belong on
+    # the domain logic that earns them, not on every widget constructor.
+    public_member_api_docs: false
+
+    # SQL strings, long provider chains and export headers do not read better
+    # wrapped at 80. `dart format` still governs actual layout.
+    lines_longer_than_80_chars: false
