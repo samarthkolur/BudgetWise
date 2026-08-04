@@ -30,3 +30,8 @@ linter:
     # SQL strings, long provider chains and export headers do not read better
     # wrapped at 80. `dart format` still governs actual layout.
     lines_longer_than_80_chars: false
+
+    # Riverpod provider types are long generic names that restate the
+    # right-hand side. `FutureProviderFamily<List<CategorySpend>, String>` on a
+    # declaration that already says FutureProvider.family is noise, not clarity.
+    specify_nonobvious_property_types: false
