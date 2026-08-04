@@ -92,92 +92,85 @@ const _weightInvestment = 5.0;
 /// components are rescaled to 100, so a locked user is not permanently capped
 /// at 95 for a feature they have not been given access to yet.
 HealthScore computeHealthScore(HealthScoreInput input) {
-  final components = <ScoreComponent>[];
+  // Spending at or under the plan. Spending far under is not penalised; the
+  // plan is a ceiling, not a quota.
+  final adherence = input.totalAllocated.isZero
+      ? 1.0
+      : 1 -
+            (input.totalSpent.ratioOf(input.totalAllocated) - 1).clamp(
+              0.0,
+              1.0,
+            );
 
-  // Savings completion — the heaviest weight, because it is the behaviour the
-  // whole product exists to build.
-  components.add(
+  // The app cannot help with money it never hears about.
+  final loggingRatio = input.daysElapsed <= 0
+      ? 1.0
+      : (input.daysWithExpenses / input.daysElapsed).clamp(0.0, 1.0);
+
+  // Proportion of categories kept inside their limit.
+  final overspendRatio = input.categoryCount <= 0
+      ? 1.0
+      : 1 - (input.categoriesExceeded / input.categoryCount).clamp(0.0, 1.0);
+
+  final components = <ScoreComponent>[
+    // The heaviest weight, because it is the behaviour the whole product
+    // exists to build.
     ScoreComponent(
       key: 'savings_completion',
       label: 'Savings completed',
       earned: input.savingsTarget.isZero
           ? _weightSavings
           : _weightSavings *
-              (input.savingsActual.ratioOf(input.savingsTarget)).clamp(0.0, 1.0),
+                input.savingsActual
+                    .ratioOf(input.savingsTarget)
+                    .clamp(0.0, 1.0),
       available: _weightSavings,
     ),
-  );
-
-  // Category adherence — spending at or under the plan. Spending far under is
-  // not penalised; the plan is a ceiling, not a quota.
-  final adherence = input.totalAllocated.isZero
-      ? 1.0
-      : (1 - (input.totalSpent.ratioOf(input.totalAllocated) - 1).clamp(0.0, 1.0));
-  components.add(
     ScoreComponent(
       key: 'category_adherence',
       label: 'Stayed within budget',
       earned: _weightAdherence * adherence,
       available: _weightAdherence,
     ),
-  );
-
-  // Logging consistency — the app cannot help with money it never hears about.
-  final loggingRatio = input.daysElapsed <= 0
-      ? 1.0
-      : (input.daysWithExpenses / input.daysElapsed).clamp(0.0, 1.0);
-  components.add(
     ScoreComponent(
       key: 'logging_consistency',
       label: 'Recorded expenses regularly',
       earned: _weightLogging * loggingRatio,
       available: _weightLogging,
     ),
-  );
-
-  // Overspend avoidance — proportion of categories kept inside their limit.
-  final overspendRatio = input.categoryCount <= 0
-      ? 1.0
-      : 1 - (input.categoriesExceeded / input.categoryCount).clamp(0.0, 1.0);
-  components.add(
     ScoreComponent(
       key: 'overspend_avoidance',
       label: 'Avoided overspending',
       earned: _weightOverspend * overspendRatio,
       available: _weightOverspend,
     ),
-  );
-
-  // Goal progress. A user with no goals is not penalised for not having any —
-  // goals are optional, and scoring their absence would push people into
-  // creating goals they do not want.
-  components.add(
+    // A user with no goals is not penalised for not having any — goals are
+    // optional, and scoring their absence would push people into creating
+    // goals they do not want.
     ScoreComponent(
       key: 'goal_progress',
       label: 'Progress toward goals',
       earned: input.goalTargetThisMonth.isZero
           ? _weightGoals
           : _weightGoals *
-              (input.goalContributed.ratioOf(input.goalTargetThisMonth))
-                  .clamp(0.0, 1.0),
+                input.goalContributed
+                    .ratioOf(input.goalTargetThisMonth)
+                    .clamp(0.0, 1.0),
       available: _weightGoals,
     ),
-  );
-
-  if (input.investingUnlocked) {
-    components.add(
+    if (input.investingUnlocked)
       ScoreComponent(
         key: 'investment_completion',
         label: 'Investment completed',
         earned: input.investmentTarget.isZero
             ? _weightInvestment
             : _weightInvestment *
-                (input.investmentActual.ratioOf(input.investmentTarget))
-                    .clamp(0.0, 1.0),
+                  input.investmentActual
+                      .ratioOf(input.investmentTarget)
+                      .clamp(0.0, 1.0),
         available: _weightInvestment,
       ),
-    );
-  }
+  ];
 
   final earned = components.fold<double>(0, (a, c) => a + c.earned);
   final available = components.fold<double>(0, (a, c) => a + c.available);

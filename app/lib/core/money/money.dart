@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 /// An exact monetary amount, stored in **minor units** (paise).
@@ -8,6 +9,7 @@ import 'package:intl/intl.dart';
 /// Every amount in BudgetWise is an integer count of paise from the database
 /// column through to the widget, and is converted to a display string exactly
 /// once, at the edge.
+@immutable
 class Money implements Comparable<Money> {
   const Money(this.minor);
 
@@ -76,20 +78,26 @@ class Money implements Comparable<Money> {
   double ratioOf(Money total) => total.isZero ? 0 : minor / total.minor;
 
   /// A percentage of this amount, floored to the paisa. Flooring rather than
-  /// rounding is what lets [allocateByPercent] hand the shortfall out
+  /// rounding is what lets the largest-remainder allocator hand the shortfall out
   /// deliberately instead of letting each share round up independently.
   Money percent(double pct) => Money((minor * pct / 100).floor());
 
   /// `₹1,25,000.50` — Indian digit grouping, two decimals.
   String format({String locale = 'en_IN', String symbol = '₹'}) =>
-      NumberFormat.currency(locale: locale, symbol: symbol, decimalDigits: 2)
-          .format(asRupees);
+      NumberFormat.currency(
+        locale: locale,
+        symbol: symbol,
+        decimalDigits: 2,
+      ).format(asRupees);
 
   /// `₹1,25,000` — no decimals. Used where the paise are noise: summary tiles,
   /// category cards, the safe-daily-spend figure.
   String formatCompact({String locale = 'en_IN', String symbol = '₹'}) =>
-      NumberFormat.currency(locale: locale, symbol: symbol, decimalDigits: 0)
-          .format(asRupees);
+      NumberFormat.currency(
+        locale: locale,
+        symbol: symbol,
+        decimalDigits: 0,
+      ).format(asRupees);
 
   @override
   int compareTo(Money other) => minor.compareTo(other.minor);

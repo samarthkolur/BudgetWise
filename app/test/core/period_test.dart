@@ -5,7 +5,10 @@ void main() {
   group('Period normalisation', () {
     test('renders the first of the month for the date column', () {
       expect(Period(2026, 8).isoDate, '2026-08-01');
-      expect(Period.fromDate(DateTime(2026, 8, 31, 23, 59)).isoDate, '2026-08-01');
+      expect(
+        Period.fromDate(DateTime(2026, 8, 31, 23, 59)).isoDate,
+        '2026-08-01',
+      );
     });
 
     test('rolls month overflow into the year', () {
@@ -28,21 +31,27 @@ void main() {
       expect(Period(2026, 4).totalDays, 30);
     });
 
-    test('lastDay is the final instant, so an 11pm expense still lands inside', () {
-      final august = Period(2026, 8);
-      expect(august.contains(DateTime(2026, 8, 31, 23, 0)), isTrue);
-      expect(august.contains(DateTime(2026, 9)), isFalse);
-      expect(august.lastDay.day, 31);
-    });
+    test(
+      'lastDay is the final instant, so an 11pm expense still lands inside',
+      () {
+        final august = Period(2026, 8);
+        expect(august.contains(DateTime(2026, 8, 31, 23)), isTrue);
+        expect(august.contains(DateTime(2026, 9)), isFalse);
+        expect(august.lastDay.day, 31);
+      },
+    );
   });
 
   group('Period.daysRemaining', () {
-    test('includes today — a user checking at 9am still gets to spend today', () {
-      final august = Period(2026, 8);
-      expect(august.daysRemaining(now: DateTime(2026, 8, 31, 9)), 1);
-      expect(august.daysRemaining(now: DateTime(2026, 8)), 31);
-      expect(august.daysRemaining(now: DateTime(2026, 8, 15)), 17);
-    });
+    test(
+      'includes today — a user checking at 9am still gets to spend today',
+      () {
+        final august = Period(2026, 8);
+        expect(august.daysRemaining(now: DateTime(2026, 8, 31, 9)), 1);
+        expect(august.daysRemaining(now: DateTime(2026, 8)), 31);
+        expect(august.daysRemaining(now: DateTime(2026, 8, 15)), 17);
+      },
+    );
 
     test('a past month has nothing left, a future month has all of it', () {
       expect(Period(2026, 7).daysRemaining(now: DateTime(2026, 8, 15)), 0);

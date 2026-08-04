@@ -16,22 +16,21 @@ HealthScoreInput _input({
   Money investmentActual = const Money.zero(),
   Money goalTarget = const Money.zero(),
   Money goalContributed = const Money.zero(),
-}) =>
-    HealthScoreInput(
-      savingsTarget: savingsTarget,
-      savingsActual: savingsActual,
-      totalAllocated: totalAllocated,
-      totalSpent: totalSpent,
-      categoriesExceeded: categoriesExceeded,
-      categoryCount: categoryCount,
-      daysWithExpenses: daysWithExpenses,
-      daysElapsed: daysElapsed,
-      investingUnlocked: investingUnlocked,
-      investmentTarget: investmentTarget,
-      investmentActual: investmentActual,
-      goalTargetThisMonth: goalTarget,
-      goalContributed: goalContributed,
-    );
+}) => HealthScoreInput(
+  savingsTarget: savingsTarget,
+  savingsActual: savingsActual,
+  totalAllocated: totalAllocated,
+  totalSpent: totalSpent,
+  categoriesExceeded: categoriesExceeded,
+  categoryCount: categoryCount,
+  daysWithExpenses: daysWithExpenses,
+  daysElapsed: daysElapsed,
+  investingUnlocked: investingUnlocked,
+  investmentTarget: investmentTarget,
+  investmentActual: investmentActual,
+  goalTargetThisMonth: goalTarget,
+  goalContributed: goalContributed,
+);
 
 void main() {
   group('computeHealthScore', () {
@@ -66,41 +65,58 @@ void main() {
         _input(savingsActual: const Money(500000)),
       );
       expect(half.score, lessThan(100));
-      final savings = half.components.firstWhere((c) => c.key == 'savings_completion');
+      final savings = half.components.firstWhere(
+        (c) => c.key == 'savings_completion',
+      );
       expect(savings.ratio, closeTo(0.5, 0.001));
     });
 
     test('spending under the plan is never penalised', () {
-      final frugal = computeHealthScore(_input(totalSpent: const Money(1000000)));
-      final exact = computeHealthScore(_input(totalSpent: const Money(4000000)));
+      final frugal = computeHealthScore(
+        _input(totalSpent: const Money(1000000)),
+      );
+      final exact = computeHealthScore(
+        _input(totalSpent: const Money(4000000)),
+      );
       expect(frugal.score, exact.score);
     });
 
-    test('exceeded categories reduce the overspend component proportionally', () {
-      final result = computeHealthScore(
-        _input(categoriesExceeded: 2, categoryCount: 4),
-      );
-      final component = result.components.firstWhere((c) => c.key == 'overspend_avoidance');
-      expect(component.ratio, closeTo(0.5, 0.001));
-    });
+    test(
+      'exceeded categories reduce the overspend component proportionally',
+      () {
+        final result = computeHealthScore(
+          _input(categoriesExceeded: 2, categoryCount: 4),
+        );
+        final component = result.components.firstWhere(
+          (c) => c.key == 'overspend_avoidance',
+        );
+        expect(component.ratio, closeTo(0.5, 0.001));
+      },
+    );
 
     test('sporadic logging reduces the score', () {
-      final result = computeHealthScore(_input(daysWithExpenses: 6, daysElapsed: 30));
-      final component = result.components.firstWhere((c) => c.key == 'logging_consistency');
+      final result = computeHealthScore(_input(daysWithExpenses: 6));
+      final component = result.components.firstWhere(
+        (c) => c.key == 'logging_consistency',
+      );
       expect(component.ratio, closeTo(0.2, 0.001));
     });
 
     test('having no goals is not a penalty', () {
       final withoutGoals = computeHealthScore(_input());
-      final goalComponent =
-          withoutGoals.components.firstWhere((c) => c.key == 'goal_progress');
+      final goalComponent = withoutGoals.components.firstWhere(
+        (c) => c.key == 'goal_progress',
+      );
       expect(goalComponent.ratio, 1.0);
     });
 
     test('locked investing rescales rather than capping the score at 95', () {
       final locked = computeHealthScore(_input());
       expect(locked.score, 100);
-      expect(locked.components.any((c) => c.key == 'investment_completion'), isFalse);
+      expect(
+        locked.components.any((c) => c.key == 'investment_completion'),
+        isFalse,
+      );
 
       final unlocked = computeHealthScore(
         _input(
@@ -110,7 +126,10 @@ void main() {
         ),
       );
       expect(unlocked.score, 100);
-      expect(unlocked.components.any((c) => c.key == 'investment_completion'), isTrue);
+      expect(
+        unlocked.components.any((c) => c.key == 'investment_completion'),
+        isTrue,
+      );
     });
 
     test('is deterministic for identical input', () {
@@ -125,7 +144,6 @@ void main() {
           savingsActual: const Money(99999999),
           totalSpent: const Money(99999999),
           categoriesExceeded: 99,
-          categoryCount: 5,
           daysWithExpenses: 99,
           daysElapsed: 1,
         ),
@@ -137,7 +155,10 @@ void main() {
       expect(const HealthScore(score: 90, components: []).band, 'Excellent');
       expect(const HealthScore(score: 72, components: []).band, 'Strong');
       expect(const HealthScore(score: 55, components: []).band, 'Building');
-      expect(const HealthScore(score: 20, components: []).band, 'Getting started');
+      expect(
+        const HealthScore(score: 20, components: []).band,
+        'Getting started',
+      );
     });
   });
 }

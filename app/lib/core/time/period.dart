@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 /// A budget month.
@@ -11,9 +12,8 @@ import 'package:intl/intl.dart';
 /// Month arithmetic is done in the user's **local** zone. An expense logged at
 /// 11pm on the 31st belongs to that month as the user lived it, not as UTC saw
 /// it; storage is UTC, interpretation is local.
+@immutable
 class Period implements Comparable<Period> {
-  const Period._(this.year, this.month);
-
   factory Period(int year, int month) {
     // Normalise out-of-range months so `Period(2026, 13)` is January 2027
     // rather than an assertion nobody sees until production.
@@ -23,9 +23,12 @@ class Period implements Comparable<Period> {
     return Period._(y, m + 1);
   }
 
+  const Period._(this.year, this.month);
+
   factory Period.fromDate(DateTime date) => Period(date.year, date.month);
 
-  factory Period.current({DateTime? now}) => Period.fromDate(now ?? DateTime.now());
+  factory Period.current({DateTime? now}) =>
+      Period.fromDate(now ?? DateTime.now());
 
   /// Parses the `date` column, which Postgres renders as `YYYY-MM-DD`.
   factory Period.parse(String value) {
@@ -84,8 +87,9 @@ class Period implements Comparable<Period> {
   String get shortLabel => DateFormat('MMM yyyy').format(firstDay);
 
   @override
-  int compareTo(Period other) =>
-      year != other.year ? year.compareTo(other.year) : month.compareTo(other.month);
+  int compareTo(Period other) => year != other.year
+      ? year.compareTo(other.year)
+      : month.compareTo(other.month);
 
   @override
   bool operator ==(Object other) =>

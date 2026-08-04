@@ -47,7 +47,11 @@ SafeDailySpend safeDailySpend({
   final safe = remaining.orZeroIfNegative;
 
   if (days <= 0) {
-    return SafeDailySpend(perDay: const Money.zero(), remaining: safe, daysRemaining: 0);
+    return SafeDailySpend(
+      perDay: const Money.zero(),
+      remaining: safe,
+      daysRemaining: 0,
+    );
   }
 
   final perDayMinor = (safe.minor ~/ days ~/ 100) * 100;
@@ -73,7 +77,8 @@ class CategoryProgress {
   /// How far past the allocation this category has gone. Kept separate from
   /// [remaining] rather than encoded as a negative remainder — the PRD wants
   /// the overspend stated as its own number, not inferred from a minus sign.
-  Money get overspend => spent > allocated ? spent - allocated : const Money.zero();
+  Money get overspend =>
+      spent > allocated ? spent - allocated : const Money.zero();
 
   bool get isExceeded => spent > allocated;
 
@@ -101,8 +106,9 @@ class ReallocationSuggestion {
   final Money amount;
   final Money availableAtSource;
 
-  /// True when the source cannot cover the whole overspend on its own.
-  bool get isPartial => amount < availableAtSource ? false : true;
+  /// True when covering the overspend would consume the source's entire
+  /// surplus, leaving that category with nothing spare of its own.
+  bool get drainsSource => amount >= availableAtSource;
 }
 
 /// Finds the healthiest category with room to cover [overspend].
