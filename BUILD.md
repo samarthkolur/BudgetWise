@@ -8,6 +8,18 @@
 > Google-only sign-in** per the current project decision. Everything else in the PRD — the
 > Earn → Save → Invest → Spend philosophy, onboarding, dashboard, ledger, monthly reset,
 > investment gating, health score, goals, exports — is implemented as written.
+>
+> ---
+>
+> **⚠️ This document is the plan as written on 2026-08-04, before implementation.** Phases 0–6 have
+> since been built, and three decisions here were overturned during the build. They are corrected
+> inline below and recorded in `CLAUDE.md`, which is the authority on **current state**:
+>
+> | Planned here | Actually built | Why |
+> |---|---|---|
+> | Lefthook | Plain shell hooks via `core.hooksPath` | Lefthook not installed; a binary + `node_modules` to check a regex is cost with no return |
+> | Riverpod codegen, freezed, json_serializable | Neither — plain providers, hand-written models | `riverpod_lint`/`riverpod_generator` need Dart ≥3.12; this host has 3.9.2 |
+> | `with check` clauses for child ownership | Composite foreign keys | Makes the cross-user attack unrepresentable rather than merely policed |
 
 ---
 
@@ -16,14 +28,14 @@
 | Area | Decision | Rationale |
 |---|---|---|
 | Client | Flutter (single codebase: Android, iOS, later Web) | One team, one language, native perf |
-| State | Riverpod v2 + `riverpod_generator` | Compile-safe DI, testable, no BuildContext coupling |
+| State | ~~Riverpod v2 + `riverpod_generator`~~ → **Riverpod 3, no codegen** | Codegen needs Dart ≥3.12; plain providers work and remove a build step |
 | Routing | `go_router` with auth+onboarding redirect guards | Declarative deep-linkable routes |
 | Backend | Supabase (Postgres + Auth + Storage + Edge Functions) | Removes the need for a bespoke API tier |
 | Auth | **Supabase Auth**, Google as the only enabled provider | One vendor for identity + data; `auth.uid()` is what RLS keys on |
 | Data access | Supabase Dart client, direct-to-Postgres, guarded by RLS | RLS *is* the authorization layer |
 | Money | `bigint` **minor units** (paise). Never `float`/`double` | Eliminates rounding drift in budget math |
 | Local cache | Drift (SQLite) — Phase 7, offline-first | Ship online-first, add offline once schema is stable |
-| Hooks | **Lefthook** + `gitleaks` + `commitlint` | Single binary, no Python/Node runtime tax, fast |
+| Hooks | ~~Lefthook~~ → **plain shell + `core.hooksPath`** + `gitleaks` | No extra binary, no Node; the hooks are reviewed like any other code |
 | CI | GitHub Actions mirroring the hooks exactly | Hooks are convenience; CI is the gate |
 
 **Non-goals for v1:** bank/UPI integration, OCR receipts, SMS parsing, AI coaching, family
