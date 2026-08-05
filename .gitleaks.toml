@@ -23,7 +23,10 @@ id = "mongodb-connection-string"
 description = "MongoDB connection string with inline credentials"
 # mongodb+srv://user:password@cluster.mongodb.net — the password is right there
 # in the URI, which is what makes this shape so easy to paste into a commit.
-regex = '''mongodb(\+srv)?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s'"]+'''
+# Excludes angle-bracket placeholders (<user>:<password>@<cluster>), which is
+# how the shape is documented in .env.example — a rule that flags its own
+# documentation is a rule people learn to ignore.
+regex = '''mongodb(\+srv)?:\/\/[^:\/\s<>]+:[^@\/\s<>]+@[^\s'"<>]+'''
 keywords = ["mongodb://", "mongodb+srv://"]
 
 [[rules]]
