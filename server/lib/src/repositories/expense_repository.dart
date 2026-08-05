@@ -26,7 +26,7 @@ class ExpenseRepository {
       sort: {'spentOn': -1, 'createdAt': -1},
     );
 
-    // The SQL version got category name and icon through a join. Mongo has no
+    // A relational schema would get category name and icon through a join. Mongo has no
     // joins worth using here, so one extra query fetches the whole category set
     // for the month and the rows are decorated in memory — cheaper than
     // $lookup per document, and there are at most a dozen categories.
@@ -43,7 +43,7 @@ class ExpenseRepository {
 
   /// Adds an expense.
   ///
-  /// Both parents are checked before the write. Postgres enforced this with
+  /// Both parents are checked before the write. A relational schema enforced this with
   /// composite foreign keys — `(budget_id, user_id)` and `(category_id,
   /// user_id)` — which made it impossible to attach a row you own to a budget
   /// you do not. Mongo has no foreign keys at all, so these two checks are the

@@ -1,9 +1,10 @@
-import 'package:budgetwise/core/money/money.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 
 /// The user's own row in `profiles`, created by a database trigger on sign-up.
 class Profile {
   const Profile({
     required this.id,
+    this.email,
     this.displayName,
     this.avatarUrl,
     this.currency = 'INR',
@@ -14,15 +15,17 @@ class Profile {
 
   factory Profile.fromJson(Map<String, dynamic> json) => Profile(
     id: json['id'] as String,
-    displayName: json['display_name'] as String?,
-    avatarUrl: json['avatar_url'] as String?,
+    email: json['email'] as String?,
+    displayName: json['displayName'] as String?,
+    avatarUrl: json['avatarUrl'] as String?,
     currency: json['currency'] as String? ?? 'INR',
     locale: json['locale'] as String? ?? 'en_IN',
-    onboardingCompletedAt: _date(json['onboarding_completed_at']),
-    investingUnlockedAt: _date(json['investing_unlocked_at']),
+    onboardingCompletedAt: _date(json['onboardingCompletedAt']),
+    investingUnlockedAt: _date(json['investingUnlockedAt']),
   );
 
   final String id;
+  final String? email;
   final String? displayName;
   final String? avatarUrl;
   final String currency;
@@ -57,6 +60,7 @@ class Profile {
     DateTime? investingUnlockedAt,
   }) => Profile(
     id: id,
+    email: email,
     displayName: displayName ?? this.displayName,
     avatarUrl: avatarUrl,
     currency: currency,

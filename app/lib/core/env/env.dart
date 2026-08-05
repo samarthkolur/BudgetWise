@@ -2,43 +2,56 @@
 ///
 ///     flutter run --dart-define-from-file=config/dev.json
 ///
-/// `config/*.json` is not committed; `config/example.json` is. The anon key is
-/// publishable — it is designed to ship inside a client — but environments still
-/// have to stay swappable, and secrets must not learn the habit of living in
-/// git. The real security boundary is RLS, not the secrecy of this key.
+/// `config/*.json` is not committed; `config/example.json` is. Nothing secret
+/// lives here: the app holds no database credential at all now, because it does
+/// not talk to MongoDB. It talks to the API, and the API holds the connection
+/// string. That separation is the whole reason the server exists.
 ///
 /// Read through `const String.fromEnvironment`, which is resolved at compile
-/// time. There is no runtime lookup to fail, and no `.env` file to forget to
+/// time — there is no runtime lookup to fail and no `.env` file to forget to
 /// ship.
 abstract final class Env {
-  static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
-  static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+  /// Where the API lives. No trailing slash.
+  ///
+  /// On an Android emulator, `localhost` is the emulator itself — use
+  /// `http://10.0.2.2:8080`. On a physical phone it must be the development
+  /// machine's LAN address; the device has no route to your loopback.
+  static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
-  /// The **web** OAuth client ID. Passed to Google Sign-In as `serverClientId`
-  /// and configured in Supabase as the provider's client ID — it is the
-  /// audience Supabase validates the ID token against. Not the Android one.
+  /// The **web** OAuth client ID. Passed to Google Sign-In as `serverClientId`,
+  /// and the audience the API validates the returned ID token against. Not the
+  /// Android one.
   static const googleWebClientId = String.fromEnvironment(
     'GOOGLE_WEB_CLIENT_ID',
   );
 
   /// iOS only. Android derives its client from the package name and signing
-  /// certificate, so it needs no ID here — but the release SHA-1 must be
-  /// registered on the Android OAuth client or sign-in works in debug and fails
-  /// in production.
+  /// certificate — but the release SHA-1 must be registered on the Google
+  /// Android OAuth client, or sign-in works in debug and fails in production.
   static const googleIosClientId = String.fromEnvironment(
     'GOOGLE_IOS_CLIENT_ID',
   );
 
-  static bool get isConfigured =>
-      supabaseUrl.isNotEmpty &&
-      supabaseAnonKey.isNotEmpty &&
-      googleWebClientId.isNotEmpty;
+  static bool get isConfigured => missingKeys.isEmpty;
 
   /// Names what is missing, so a misconfigured build says so on screen instead
   /// of failing later as an unexplained network error.
+  ///
+  /// A value straight out of `config/example.json` counts as missing. Checking
+  /// only for emptiness was not enough, and this was found by running the app
+  /// on a real device: copying the example file gives every key a non-empty
+  /// placeholder, so the guard passed, the app booted past the configuration
+  /// screen, and sign-in opened Google's account chooser before failing against
+  /// a backend that did not exist. A confusing failure three screens in is
+  /// exactly what this check exists to prevent.
   static List<String> get missingKeys => [
-    if (supabaseUrl.isEmpty) 'SUPABASE_URL',
-    if (supabaseAnonKey.isEmpty) 'SUPABASE_ANON_KEY',
-    if (googleWebClientId.isEmpty) 'GOOGLE_WEB_CLIENT_ID',
+    if (_unset(apiBaseUrl)) 'API_BASE_URL',
+    if (_unset(googleWebClientId)) 'GOOGLE_WEB_CLIENT_ID',
   ];
+
+  static bool _unset(String value) =>
+      value.isEmpty ||
+      value.contains('YOUR_') ||
+      value.contains('<your-') ||
+      value.contains('ci-placeholder');
 }

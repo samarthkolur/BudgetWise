@@ -88,7 +88,7 @@ class ApiRoutes {
 
   /// Deletes the account and everything in it.
   ///
-  /// Required by both app stores. Postgres did this with `on delete cascade`;
+  /// Required by both app stores. A relational schema did this with `on delete cascade`;
   /// here it is an explicit sweep of every collection — see
   /// [Mongo.deleteEverythingOwnedBy].
   Future<Response> _deleteAccount(Request request) async {

@@ -1,11 +1,9 @@
-import 'package:budgetwise/core/budget/health_score.dart';
-import 'package:budgetwise/core/money/money.dart';
 import 'package:budgetwise/core/providers.dart';
-import 'package:budgetwise/core/time/period.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/insights/domain/insight_rules.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

@@ -3,15 +3,16 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 /// Everything that can go wrong, in terms the UI can act on.
 ///
-/// Repositories map Postgrest, Auth and socket exceptions to these at the data
-/// boundary, so no widget ever branches on a driver-specific error class and no
-/// raw database message reaches a user. A Postgres constraint name is a fact
-/// about our schema; it is not an explanation anyone outside this codebase can
-/// use.
+/// The API sends a machine-readable `error` code and a message already written
+/// for a human, so the API client maps status codes to these types and passes the
+/// message through. Nothing above the data layer branches on an HTTP status,
+/// and no server-side detail reaches a user.
+///
+/// The client never speaks to the database, so it has no database errors to
+/// understand — the server owns that translation and the client only has to know
+/// its own API.
 sealed class AppFailure implements Exception {
   const AppFailure(this.message, {this.cause});
 
@@ -42,8 +43,10 @@ class AuthCancelled extends AuthFailure {
   const AuthCancelled() : super('Sign-in cancelled');
 }
 
-/// The row exists but this user may not see it — or it does not exist at all.
-/// RLS makes those indistinguishable from the client, which is the point.
+/// The thing exists but is not this user's — or does not exist at all.
+///
+/// The server reports both as 404 on purpose: distinguishing them would confirm
+/// that an id is real, which is a slow enumeration oracle.
 class NotFoundFailure extends AppFailure {
   const NotFoundFailure([
     super.message = 'That is no longer available.',
@@ -51,7 +54,7 @@ class NotFoundFailure extends AppFailure {
   ]) : super(cause: cause);
 }
 
-/// A constraint said no. Usually recoverable by changing the input.
+/// The input was refused. Usually recoverable by changing it.
 class ValidationFailure extends AppFailure {
   const ValidationFailure(super.message, {super.cause});
 }
@@ -70,15 +73,16 @@ class UnexpectedFailure extends AppFailure {
   ]) : super(cause: cause);
 }
 
-/// Translates a driver exception into an [AppFailure].
+/// Maps a transport-level error into an [AppFailure].
 ///
-/// Postgres error codes are matched rather than message text: messages are
-/// localised and reworded between versions, codes are not.
+/// HTTP status mapping happens in the API client; this handles what fails before a
+/// response exists — no network, DNS failure, a dropped socket.
 AppFailure mapError(Object error, [StackTrace? stackTrace]) {
   if (error is AppFailure) return error;
 
   if (error is SocketException ||
       error is TimeoutException ||
+      error is HttpException ||
       _looksLikeNetwork(error)) {
     return NetworkFailure(
       "You're offline. Your changes will sync when you reconnect.",
@@ -86,37 +90,13 @@ AppFailure mapError(Object error, [StackTrace? stackTrace]) {
     );
   }
 
-  if (error is AuthException) {
-    return AuthFailure(_authMessage(error), cause: error);
-  }
-
-  if (error is PostgrestException) {
-    return switch (error.code) {
-      // unique_violation
-      '23505' => ConflictFailure(_uniqueMessage(error), cause: error),
-      // foreign_key_violation — with composite FKs this most often means the
-      // parent belongs to someone else, which is a permission problem wearing a
-      // constraint's clothes.
-      '23503' => const NotFoundFailure('That budget is no longer available.'),
-      // check_violation
-      '23514' => ValidationFailure(_checkMessage(error), cause: error),
-      // not_null_violation
-      '23502' => const ValidationFailure('Something required was missing.'),
-      // insufficient_privilege — RLS refused it
-      '42501' => const AuthFailure('You do not have access to that.'),
-      // PostgREST: no rows where exactly one was expected
-      'PGRST116' => const NotFoundFailure(),
-      _ => UnexpectedFailure('Something went wrong. Please try again.', error),
-    };
-  }
-
   return UnexpectedFailure('Something went wrong. Please try again.', error);
 }
 
-/// The http package's `ClientException` is not on this project's import surface,
-/// and Supabase wraps transport failures in several shapes besides it. Matching
-/// on the rendered message is uglier than a type check but catches all of them,
-/// and the cost of a false positive is only a friendlier error message.
+/// The http package's `ClientException` is not on this project's import
+/// surface, and a dropped connection surfaces in several shapes besides it.
+/// Matching on the rendered message is uglier than a type check but catches all
+/// of them, and the cost of a false positive is only a friendlier message.
 bool _looksLikeNetwork(Object error) {
   final text = error.toString().toLowerCase();
   return text.contains('socketexception') ||
@@ -124,41 +104,6 @@ bool _looksLikeNetwork(Object error) {
       text.contains('failed host lookup') ||
       text.contains('connection closed') ||
       text.contains('connection refused') ||
+      text.contains('connection reset') ||
       text.contains('network is unreachable');
-}
-
-String _authMessage(AuthException error) {
-  final raw = error.message.toLowerCase();
-  if (raw.contains('expired')) {
-    return 'Your session expired. Please sign in again.';
-  }
-  if (raw.contains('network') || raw.contains('failed host lookup')) {
-    return "Couldn't reach the server. Check your connection.";
-  }
-  return 'Sign-in failed. Please try again.';
-}
-
-String _uniqueMessage(PostgrestException error) {
-  final detail = '${error.message} ${error.details ?? ''}';
-  if (detail.contains('monthly_budgets_one_per_month')) {
-    return 'A plan already exists for that month.';
-  }
-  if (detail.contains('budget_categories_one_per_budget')) {
-    return "That category is already in this month's plan.";
-  }
-  return 'That already exists.';
-}
-
-String _checkMessage(PostgrestException error) {
-  final detail = '${error.message} ${error.details ?? ''}';
-  if (detail.contains('savings_within_income')) {
-    return 'Savings cannot be more than your income.';
-  }
-  if (detail.contains('period_is_month_start')) {
-    return 'That month is not valid.';
-  }
-  if (detail.contains('amount_minor')) {
-    return 'Enter an amount greater than zero.';
-  }
-  return 'Those values are not valid.';
 }

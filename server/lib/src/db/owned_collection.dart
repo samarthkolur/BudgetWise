@@ -5,7 +5,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 /// **This class is the replacement for row-level security, and it is the most
 /// important file in the server.**
 ///
-/// Under Postgres, RLS applied `user_id = auth.uid()` to every statement in the
+/// Row-level security applies an owner comparison to every statement inside the
 /// database itself. A developer who forgot a filter got no rows; a developer who
 /// wrote a deliberately broad query still got no rows. That safety net does not
 /// exist in MongoDB — an unfiltered `find()` returns every user's documents, and
@@ -23,7 +23,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 ///    [OwnedCollection] built from the authenticated principal.
 /// 2. **`ownerId` is stamped on insert**, overwriting whatever the client sent,
 ///    so a forged `ownerId` in a request body is discarded rather than trusted.
-/// 3. **Cross-parent writes are checked explicitly.** Postgres had composite
+/// 3. **Cross-parent writes are checked explicitly.** A relational schema had composite
 ///    foreign keys — `(budget_id, user_id) references budgets (id, user_id)` —
 ///    which made attaching your own row to someone else's budget impossible.
 ///    Mongo has no foreign keys, so [owns] performs that check by hand,

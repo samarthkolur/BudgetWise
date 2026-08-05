@@ -1,30 +1,30 @@
+import 'package:budgetwise/core/api/api_client.dart';
+import 'package:budgetwise/core/api/token_store.dart';
 import 'package:budgetwise/core/env/env.dart';
 import 'package:budgetwise/core/errors/failures.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Google sign-in, exchanged for a Supabase session.
+/// Google sign-in, exchanged for a BudgetWise session.
 ///
-/// **Supabase Auth is the identity system.** It owns `auth.users`, issues and
-/// refreshes the JWT, and supplies the `auth.uid()` that every RLS policy keys
-/// on. Google is the single enabled provider inside it, and this class is only
-/// the native account picker — it holds no session and makes no authorization
-/// decision. The source of truth for "who is signed in" is always
-/// `supabase.auth.currentSession`.
-///
-/// The native ID-token flow is used rather than `signInWithOAuth`: it shows the
-/// platform account sheet instead of handing off to a browser, and needs no
-/// deep-link configuration or redirect allowlist entry.
+/// The app sends the Google ID token to our API, which verifies it against
+/// Google and returns tokens it signed. `google_sign_in`
+/// remains only the native account picker — it holds no session and makes no
+/// authorization decision.
 ///
 /// Written against google_sign_in v7, which replaced `signIn()` with
-/// `initialize()` + `authenticate()` and moved access tokens to
-/// `authorizationClient`. The major version is pinned in pubspec.yaml; check
-/// the package README before changing it.
+/// `initialize()` + `authenticate()`. The major version is pinned because every
+/// tutorial still shows the v6 API.
 class GoogleAuthService {
-  GoogleAuthService(this._supabase, {GoogleSignIn? googleSignIn})
-    : _google = googleSignIn ?? GoogleSignIn.instance;
+  GoogleAuthService({
+    required ApiClient api,
+    required TokenStore tokens,
+    GoogleSignIn? googleSignIn,
+  }) : _api = api,
+       _tokens = tokens,
+       _google = googleSignIn ?? GoogleSignIn.instance;
 
-  final SupabaseClient _supabase;
+  final ApiClient _api;
+  final TokenStore _tokens;
   final GoogleSignIn _google;
 
   bool _initialised = false;
@@ -35,19 +35,18 @@ class GoogleAuthService {
       // iOS reads its client from here; Android derives its own from the
       // package name and signing certificate, so it passes nothing.
       clientId: Env.googleIosClientId.isEmpty ? null : Env.googleIosClientId,
-      // The audience Supabase validates the returned ID token against. This is
+      // The audience our API validates the returned ID token against. This is
       // the WEB client ID, not the Android one.
       serverClientId: Env.googleWebClientId,
     );
     _initialised = true;
   }
 
-  /// Opens the account picker and exchanges the result for a Supabase session.
+  /// Opens the account picker and exchanges the result for a session.
   ///
   /// Throws [AuthCancelled] when the user dismisses the sheet — a cancellation
-  /// is a decision, not a failure, and callers are expected to treat it as
-  /// silence rather than showing an error.
-  Future<AuthResponse> signIn() async {
+  /// is a decision, not a failure, and callers treat it as silence.
+  Future<void> signIn() async {
     try {
       await _ensureInitialised();
 
@@ -57,23 +56,21 @@ class GoogleAuthService {
 
       final idToken = account.authentication.idToken;
       if (idToken == null) {
-        // Almost always a configuration problem rather than a user one: the
-        // serverClientId is wrong, or this build's SHA-1 is not registered on
-        // the Google Android OAuth client.
+        // Almost always configuration rather than the user: the serverClientId
+        // is wrong, or this build's SHA-1 is not registered on the Google
+        // Android OAuth client.
         throw const AuthFailure(
           "Google didn't return a sign-in token. Please try again.",
         );
       }
 
-      // Access token is optional for Supabase, but supplying it lets the
-      // session carry Google's own token where a later feature needs it.
-      final authorization = await account.authorizationClient
-          .authorizationForScopes(const ['email', 'profile']);
+      final response =
+          await _api.postAnonymous('/v1/auth/google', {'idToken': idToken})
+              as Map<String, dynamic>;
 
-      return await _supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.google,
-        idToken: idToken,
-        accessToken: authorization?.accessToken,
+      await _tokens.save(
+        accessToken: response['accessToken'] as String,
+        refreshToken: response['refreshToken'] as String,
       );
     } on GoogleSignInException catch (error) {
       if (error.code == GoogleSignInExceptionCode.canceled) {
@@ -87,20 +84,33 @@ class GoogleAuthService {
     }
   }
 
-  /// Ends both sessions.
+  /// Ends the session everywhere it exists.
   ///
-  /// Google is signed out as well as Supabase, so the next sign-in shows the
-  /// account picker rather than silently reusing the previous account — on a
-  /// shared device, skipping this signs the wrong person back in.
+  /// The refresh token is revoked server-side first, so it cannot be replayed;
+  /// then Google is signed out so the next sign-in shows the account picker
+  /// rather than silently reusing the previous account — on a shared device,
+  /// skipping that signs the wrong person back in.
   Future<void> signOut() async {
+    final refreshToken = await _tokens.refreshToken;
+    if (refreshToken != null) {
+      try {
+        await _api.postAnonymous('/v1/auth/sign-out', {
+          'refreshToken': refreshToken,
+        });
+      } on Object {
+        // A server that cannot be reached must not strand the user in a
+        // signed-in state. The local clear below is what matters here.
+      }
+    }
+
     try {
       await _ensureInitialised();
       await _google.signOut();
-    } on Object catch (_) {
-      // A failure to clear the Google account must not strand the user in a
-      // signed-in state. The Supabase sign-out below is the one that matters.
+    } on Object {
+      // Same reasoning.
     }
-    await _supabase.auth.signOut();
+
+    await _tokens.clear();
   }
 
   String _messageFor(GoogleSignInException error) => switch (error.code) {

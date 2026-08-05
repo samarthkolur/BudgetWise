@@ -6,9 +6,8 @@ import 'support/harness.dart';
 
 /// Cross-user isolation.
 ///
-/// **This is the most important suite in the project.** Under Postgres, row-level
-/// security enforced separation inside the database, and the SQL suite proved
-/// it. MongoDB has no such mechanism: separation now depends entirely on
+/// **This is the most important suite in the project.** Row-level security would enforce separation inside the database, and a SQL
+/// suite could prove it. MongoDB has no such mechanism: separation now depends entirely on
 /// [OwnedCollection] scoping every query and on the repositories checking parent
 /// ownership by hand.
 ///
@@ -162,8 +161,8 @@ void main() {
 
     /// A forged ownerId in the body must be ignored rather than honoured.
     ///
-    /// New for MongoDB: under Postgres a request body could not influence
-    /// `user_id` at all. Two things stop it here — the route extracts typed
+    /// New for MongoDB: a database-enforced owner column could not be influenced by a
+    /// request body at all. Two things stop it here — the route extracts typed
     /// fields rather than forwarding the body, and [OwnedCollection.insert]
     /// stamps the owner last. The first is what makes it safe today; the second
     /// is what keeps it safe if a handler is ever written more loosely.

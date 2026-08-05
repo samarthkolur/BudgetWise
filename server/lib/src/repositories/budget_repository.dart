@@ -6,8 +6,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 
 /// Budgets, categories and the derived views the dashboard reads.
 ///
-/// The SQL schema had `v_budget_summary` and `v_category_spend` doing this work
-/// inside Postgres. Mongo has no views over aggregates that stay in step, so the
+/// A relational schema would do this work in views inside the database. Mongo has no views over aggregates that stay in step, so the
 /// same arithmetic lives here — computed in one place and one place only, for
 /// the same reason the views existed: two implementations of "how much is left"
 /// eventually disagree, and nobody can say which is right.
@@ -36,8 +35,7 @@ class BudgetRepository {
 
   /// Creates a month's plan and its categories together.
   ///
-  /// The SQL version was a single `security definer` function, so it was atomic
-  /// by construction. Here the two writes are separate, and a standalone
+  /// A single database function would make this atomic by construction. Here the two writes are separate, and a standalone
   /// mongod cannot run a transaction — so the budget is inserted first and the
   /// categories second, with the budget removed again if the categories fail.
   /// That is a compensating action rather than a real rollback: it closes the

@@ -3,25 +3,16 @@ import 'package:budgetwise/core/router/app_router.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // A build without configuration cannot reach Supabase, and every screen would
+  // A build without configuration cannot reach the API, and every screen would
   // fail as an unexplained network error. Say so plainly instead.
   if (!Env.isConfigured) {
     runApp(const _MisconfiguredApp());
     return;
   }
-
-  await Supabase.initialize(
-    url: Env.supabaseUrl,
-    // Supabase renamed the anon key to the publishable key; it is the same
-    // client-side value. Sessions persist and refresh on their own, which is why
-    // there is no token storage code in this project.
-    publishableKey: Env.supabaseAnonKey,
-  );
 
   runApp(const ProviderScope(child: BudgetWiseApp()));
 }

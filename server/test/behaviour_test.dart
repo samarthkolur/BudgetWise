@@ -2,7 +2,7 @@ import 'package:test/test.dart';
 
 import 'support/harness.dart';
 
-/// The rules Postgres used to enforce with constraints, now enforced by code.
+/// The rules a relational schema enforced with constraints, now enforced by code.
 ///
 /// Every case here maps to a `check`, a unique index or a trigger from the SQL
 /// schema. They are tested against the running API rather than the repository

@@ -50,8 +50,7 @@ class SettingsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              ref.watch(currentSessionProvider)?.user.email ??
-                                  '',
+                              data.email ?? '',
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.onSurfaceVariant,
                               ),

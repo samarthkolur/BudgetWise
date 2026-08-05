@@ -19,6 +19,14 @@ regex = '''eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]*(c2VydmljZV9yb2xl|InNlcnZpY2V
 keywords = ["eyj", "service_role"]
 
 [[rules]]
+id = "mongodb-connection-string"
+description = "MongoDB connection string with inline credentials"
+# mongodb+srv://user:password@cluster.mongodb.net — the password is right there
+# in the URI, which is what makes this shape so easy to paste into a commit.
+regex = '''mongodb(\+srv)?:\/\/[^:\/\s]+:[^@\/\s]+@[^\s'"]+'''
+keywords = ["mongodb://", "mongodb+srv://"]
+
+[[rules]]
 id = "supabase-access-token"
 description = "Supabase personal access token"
 regex = '''sbp_[a-f0-9]{40,}'''

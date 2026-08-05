@@ -1,21 +1,16 @@
-import 'package:budgetwise/core/errors/failures.dart';
-import 'package:budgetwise/core/money/money.dart';
+import 'package:budgetwise/core/api/api_client.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 
 class GoalRepository {
-  GoalRepository(this._db);
+  GoalRepository(this._api);
 
-  final SupabaseClient _db;
+  final ApiClient _api;
 
-  Future<List<Goal>> all() async {
-    try {
-      final rows = await _db.from('goals').select().order('created_at');
-      return rows.map(Goal.fromJson).toList();
-    } on Object catch (error, stackTrace) {
-      throw mapError(error, stackTrace);
-    }
-  }
+  Future<List<Goal>> all() async => guarded(() async {
+    final rows = await _api.get('/v1/goals') as List;
+    return rows.map((r) => Goal.fromJson(r as Map<String, dynamic>)).toList();
+  });
 
   Future<Goal> create({
     required String title,
@@ -23,67 +18,35 @@ class GoalRepository {
     DateTime? targetDate,
     Money? monthlyContribution,
     String? icon,
-  }) async {
-    try {
-      final row = await _db
-          .from('goals')
-          .insert({
-            'user_id': _db.auth.currentUser!.id,
-            'title': title.trim(),
-            'target_minor': target.minor,
-            'target_date': targetDate == null ? null : _dateOnly(targetDate),
-            'monthly_contribution_minor': monthlyContribution?.minor,
-            'icon': icon,
-          })
-          .select()
-          .single();
-      return Goal.fromJson(row);
-    } on Object catch (error, stackTrace) {
-      throw mapError(error, stackTrace);
-    }
-  }
+  }) async => guarded(() async {
+    final row =
+        await _api.post('/v1/goals', {
+              'title': title,
+              'targetMinor': target.minor,
+              'targetDate': targetDate?.toUtc().toIso8601String(),
+              'monthlyContributionMinor': monthlyContribution?.minor,
+              'icon': icon,
+            })
+            as Map<String, dynamic>;
+    return Goal.fromJson(row);
+  });
 
   /// Adds money to a goal.
   ///
-  /// Only `goal_contributions` is written. `goals.saved_minor` is maintained by
-  /// a database trigger that recomputes the sum rather than incrementing it, so
-  /// an edit or a delete cannot drift the total — and the client never has to
-  /// remember to keep two numbers in step.
+  /// The running total is the server's job — it recomputes from the
+  /// contributions rather than incrementing, so an edit or a delete cannot
+  /// drift it and the client never has to keep two numbers in step.
   Future<void> contribute({
     required String goalId,
     required Money amount,
     String? budgetId,
-  }) async {
-    try {
-      await _db.from('goal_contributions').insert({
-        'user_id': _db.auth.currentUser!.id,
-        'goal_id': goalId,
-        'budget_id': budgetId,
-        'amount_minor': amount.minor,
-      });
-    } on Object catch (error, stackTrace) {
-      throw mapError(error, stackTrace);
-    }
-  }
+  }) async => guarded(
+    () => _api.post('/v1/goals/$goalId/contribute', {
+      'amountMinor': amount.minor,
+      'budgetId': budgetId,
+    }),
+  );
 
-  Future<void> delete(String goalId) async {
-    try {
-      await _db.from('goals').delete().eq('id', goalId);
-    } on Object catch (error, stackTrace) {
-      throw mapError(error, stackTrace);
-    }
-  }
-
-  Future<void> abandon(String goalId) async {
-    try {
-      await _db.from('goals').update({'status': 'abandoned'}).eq('id', goalId);
-    } on Object catch (error, stackTrace) {
-      throw mapError(error, stackTrace);
-    }
-  }
-
-  static String _dateOnly(DateTime value) =>
-      '${value.year.toString().padLeft(4, '0')}-'
-      '${value.month.toString().padLeft(2, '0')}-'
-      '${value.day.toString().padLeft(2, '0')}';
+  Future<void> delete(String goalId) async =>
+      guarded(() => _api.delete('/v1/goals/$goalId'));
 }

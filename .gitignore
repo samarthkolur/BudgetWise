@@ -1,2 +1,9 @@
 /BudgetWise Product Vision and PRD.pdf
 /CLAUDE.md
+
+# Credentials. Never tracked, whatever they are called.
+*credentials*.env
+*.credentials
+.env
+.env.*
+!.env.example

@@ -1,7 +1,5 @@
-import 'package:budgetwise/core/budget/budget_math.dart';
-import 'package:budgetwise/core/money/money.dart';
-import 'package:budgetwise/core/time/period.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 
 enum InsightTone { info, warning, celebration }
 

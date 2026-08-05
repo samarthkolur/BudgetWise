@@ -1,7 +1,4 @@
-import 'package:budgetwise/core/budget/budget_math.dart';
-import 'package:budgetwise/core/money/allocation.dart';
-import 'package:budgetwise/core/money/money.dart';
-import 'package:budgetwise/core/time/period.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 
 /// The nine categories a new month starts with.
 ///
@@ -110,22 +107,22 @@ class MonthlyBudget {
   factory MonthlyBudget.fromJson(Map<String, dynamic> json) => MonthlyBudget(
     id: json['id'] as String,
     period: Period.parse(json['period'] as String),
-    income: Money((json['income_minor'] as num).toInt()),
-    savingsTarget: Money((json['savings_target_minor'] as num).toInt()),
+    income: Money((json['incomeMinor'] as num).toInt()),
+    savingsTarget: Money((json['savingsTargetMinor'] as num).toInt()),
     savingsMode: SavingsMode.fromDb(
-      json['savings_mode'] as String? ?? 'percent',
+      json['savingsMode'] as String? ?? 'percent',
     ),
-    savingsPercent: (json['savings_percent'] as num?)?.toDouble(),
-    investmentTarget: json['investment_target_minor'] == null
+    savingsPercent: (json['savingsPercent'] as num?)?.toDouble(),
+    investmentTarget: json['investmentTargetMinor'] == null
         ? null
-        : Money((json['investment_target_minor'] as num).toInt()),
-    savingsConfirmedAt: json['savings_confirmed_at'] == null
+        : Money((json['investmentTargetMinor'] as num).toInt()),
+    savingsConfirmedAt: json['savingsConfirmedAt'] == null
         ? null
-        : DateTime.parse(json['savings_confirmed_at'] as String).toLocal(),
+        : DateTime.parse(json['savingsConfirmedAt'] as String).toLocal(),
     status: json['status'] as String? ?? 'active',
-    carriedFromPeriod: json['carried_from_period'] == null
+    carriedFromPeriod: json['carriedFromPeriod'] == null
         ? null
-        : Period.parse(json['carried_from_period'] as String),
+        : Period.parse(json['carriedFromPeriod'] as String),
   );
 
   final String id;
@@ -172,16 +169,16 @@ class CategorySpend {
   });
 
   factory CategorySpend.fromJson(Map<String, dynamic> json) => CategorySpend(
-    id: json['category_id'] as String,
-    budgetId: json['budget_id'] as String,
-    key: json['category_key'] as String,
-    name: json['display_name'] as String,
+    id: json['categoryId'] as String,
+    budgetId: json['budgetId'] as String,
+    key: json['categoryKey'] as String,
+    name: json['displayName'] as String,
     icon: json['icon'] as String? ?? '•',
-    allocated: Money((json['allocated_minor'] as num).toInt()),
-    spent: Money((json['spent_minor'] as num).toInt()),
-    allocatedPercent: (json['allocated_percent'] as num?)?.toDouble() ?? 0,
-    expenseCount: (json['expense_count'] as num?)?.toInt() ?? 0,
-    sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+    allocated: Money((json['allocatedMinor'] as num).toInt()),
+    spent: Money((json['spentMinor'] as num).toInt()),
+    allocatedPercent: (json['allocatedPercent'] as num?)?.toDouble() ?? 0,
+    expenseCount: (json['expenseCount'] as num?)?.toInt() ?? 0,
+    sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
   );
 
   final String id;
@@ -222,25 +219,25 @@ class BudgetSummary {
   });
 
   factory BudgetSummary.fromJson(Map<String, dynamic> json) => BudgetSummary(
-    budgetId: json['budget_id'] as String,
+    budgetId: json['budgetId'] as String,
     period: Period.parse(json['period'] as String),
-    income: Money((json['income_minor'] as num).toInt()),
-    savingsTarget: Money((json['savings_target_minor'] as num).toInt()),
-    savedActual: Money((json['saved_minor'] as num).toInt()),
-    allocated: Money((json['allocated_minor'] as num).toInt()),
-    spent: Money((json['spent_minor'] as num).toInt()),
-    spendable: Money((json['spendable_minor'] as num).toInt()),
-    remaining: Money((json['remaining_minor'] as num).toInt()),
-    investedActual: Money((json['invested_minor'] as num).toInt()),
-    categoryCount: (json['category_count'] as num).toInt(),
-    expenseCount: (json['expense_count'] as num).toInt(),
-    daysWithExpenses: (json['days_with_expenses'] as num).toInt(),
-    savingsConfirmedAt: json['savings_confirmed_at'] == null
+    income: Money((json['incomeMinor'] as num).toInt()),
+    savingsTarget: Money((json['savingsTargetMinor'] as num).toInt()),
+    savedActual: Money((json['savedMinor'] as num).toInt()),
+    allocated: Money((json['allocatedMinor'] as num).toInt()),
+    spent: Money((json['spentMinor'] as num).toInt()),
+    spendable: Money((json['spendableMinor'] as num).toInt()),
+    remaining: Money((json['remainingMinor'] as num).toInt()),
+    investedActual: Money((json['investedMinor'] as num).toInt()),
+    categoryCount: (json['categoryCount'] as num).toInt(),
+    expenseCount: (json['expenseCount'] as num).toInt(),
+    daysWithExpenses: (json['daysWithExpenses'] as num).toInt(),
+    savingsConfirmedAt: json['savingsConfirmedAt'] == null
         ? null
-        : DateTime.parse(json['savings_confirmed_at'] as String).toLocal(),
-    investmentTarget: json['investment_target_minor'] == null
+        : DateTime.parse(json['savingsConfirmedAt'] as String).toLocal(),
+    investmentTarget: json['investmentTargetMinor'] == null
         ? null
-        : Money((json['investment_target_minor'] as num).toInt()),
+        : Money((json['investmentTargetMinor'] as num).toInt()),
   );
 
   final String budgetId;
@@ -284,18 +281,18 @@ class Expense {
   });
 
   factory Expense.fromJson(Map<String, dynamic> json) {
-    final category = json['budget_categories'] as Map<String, dynamic>?;
+    final category = json['category'] as Map<String, dynamic>?;
     return Expense(
       id: json['id'] as String,
-      budgetId: json['budget_id'] as String,
-      categoryId: json['category_id'] as String,
-      amount: Money((json['amount_minor'] as num).toInt()),
-      spentOn: DateTime.parse(json['spent_on'] as String),
+      budgetId: json['budgetId'] as String,
+      categoryId: json['categoryId'] as String,
+      amount: Money((json['amountMinor'] as num).toInt()),
+      spentOn: DateTime.parse(json['spentOn'] as String),
       paymentMethod: PaymentMethod.fromDb(
-        json['payment_method'] as String? ?? 'upi',
+        json['paymentMethod'] as String? ?? 'upi',
       ),
       note: json['note'] as String?,
-      categoryName: category?['display_name'] as String?,
+      categoryName: category?['displayName'] as String?,
       categoryIcon: category?['icon'] as String?,
     );
   }
@@ -347,16 +344,16 @@ class Goal {
   factory Goal.fromJson(Map<String, dynamic> json) => Goal(
     id: json['id'] as String,
     title: json['title'] as String,
-    target: Money((json['target_minor'] as num).toInt()),
-    saved: Money((json['saved_minor'] as num).toInt()),
+    target: Money((json['targetMinor'] as num).toInt()),
+    saved: Money((json['savedMinor'] as num).toInt()),
     status: json['status'] as String? ?? 'active',
     icon: json['icon'] as String?,
-    targetDate: json['target_date'] == null
+    targetDate: json['targetDate'] == null
         ? null
-        : DateTime.parse(json['target_date'] as String),
-    monthlyContribution: json['monthly_contribution_minor'] == null
+        : DateTime.parse(json['targetDate'] as String),
+    monthlyContribution: json['monthlyContributionMinor'] == null
         ? null
-        : Money((json['monthly_contribution_minor'] as num).toInt()),
+        : Money((json['monthlyContributionMinor'] as num).toInt()),
   );
 
   final String id;

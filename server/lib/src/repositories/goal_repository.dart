@@ -43,7 +43,7 @@ class GoalRepository {
 
   /// Adds money to a goal and recomputes its total.
   ///
-  /// Postgres kept `goals.saved_minor` in step with a trigger that summed the
+  /// A relational schema kept the saved total in step with a trigger that summed the
   /// contributions rather than incrementing — so an edit or a delete could not
   /// drift the total. Mongo has no triggers, so [_recomputeSaved] does the same
   /// job and is called from every path that changes a contribution. Incrementing

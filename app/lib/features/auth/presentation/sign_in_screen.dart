@@ -8,7 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// There is no password field, no "forgot password", no email verification and
 /// no account-recovery path — the whole surface simply does not exist. That is
 /// the point of choosing a single federated provider, and it is enforced in the
-/// Supabase dashboard by disabling every other one, not by hiding UI here.
+/// API, which accepts Google ID tokens and nothing else — not by hiding UI here.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 

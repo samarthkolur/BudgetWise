@@ -32,7 +32,7 @@ abstract final class Col {
 /// The database handle, plus the indexes that make ownership scoping fast and
 /// the uniqueness rules the schema depends on.
 ///
-/// **Postgres enforced most of this with constraints; Mongo does not.** What
+/// **A relational schema enforced most of this with constraints; Mongo does not.** What
 /// used to be a `check` or a composite foreign key is now either a unique index
 /// (where Mongo can express it) or an explicit guard in the repository layer
 /// (where it cannot). Every such move is noted at the place it now lives, so
@@ -127,7 +127,7 @@ class Mongo {
 
   /// Deletes everything a user owns.
   ///
-  /// Postgres did this with `on delete cascade`. Mongo has no foreign keys at
+  /// A relational schema did this with `on delete cascade`. Mongo has no foreign keys at
   /// all, so the cascade is this list — and it is the reason every collection
   /// carries `ownerId` rather than relying on a parent reference. A collection
   /// added later without `ownerId` would silently survive account deletion,

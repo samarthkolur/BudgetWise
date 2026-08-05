@@ -1,9 +1,8 @@
-import 'package:budgetwise/core/money/allocation.dart';
-import 'package:budgetwise/core/money/money.dart';
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/onboarding/application/onboarding_controller.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

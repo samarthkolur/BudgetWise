@@ -33,9 +33,13 @@ android {
         // listing, and re-registering the OAuth client that is keyed to it.
         applicationId = "com.samarthkolur.budgetwise"
 
-        // 23 rather than Flutter's default: google_sign_in's Credential Manager
-        // path and Android's encrypted storage primitives both need it.
-        minSdk = 23
+        // Flutter's floor is 24 on 3.35, which already clears what
+        // google_sign_in's Credential Manager path and Supabase need. Left as
+        // flutter.minSdkVersion rather than pinned: `flutter build` rewrites
+        // this file when it upgrades the template, and a hand-pinned value gets
+        // silently reverted — which is worse than not pinning it, because the
+        // comment then lies about what the build does.
+        minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -66,20 +66,20 @@ fi
 if [[ -n "${SKIP_DB_TESTS:-}" ]]; then
   warn "database suite skipped (SKIP_DB_TESTS set)"
 elif ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
-  warn "docker unavailable — database suite skipped (CI still runs it)"
-elif git diff --name-only "@{push}..HEAD" 2>/dev/null | grep -q '^supabase/' \
+  warn "docker unavailable — server suites skipped (CI still runs them)"
+elif git diff --name-only "@{push}..HEAD" 2>/dev/null | grep -qE '^(server|packages)/' \
      || ! git rev-parse '@{push}' >/dev/null 2>&1; then
-  # Only when this push actually touches the schema, or on a first push where
-  # there is no upstream to compare against.
+  # Only when this push touches the server or the shared domain, or on a first
+  # push where there is no upstream to compare against.
   if "$ROOT/scripts/test_db.sh" >/tmp/bw_db.log 2>&1; then
-    green "database suite — $(grep -c 'PASS' /tmp/bw_db.log) assertions"
+    green "server suites — $(grep -oE '\+[0-9]+' /tmp/bw_db.log | tail -1 | tr -d '+') assertions"
   else
     red "database suite"
     tail -20 /tmp/bw_db.log
     FAILED=1
   fi
 else
-  green "schema unchanged — database suite not needed"
+  green "server unchanged — its suites not needed"
 fi
 
 if [[ $FAILED -ne 0 ]]; then

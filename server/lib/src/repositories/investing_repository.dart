@@ -7,8 +7,7 @@ import 'package:mongo_dart/mongo_dart.dart';
 
 /// The investing gate.
 ///
-/// In Postgres this was `fn_investing_unlocked()` plus an INSERT policy on the
-/// investments table that called it — so hiding the module in the UI and
+/// In a relational schema this was a function plus an INSERT policy that called it — so hiding the module in the UI and
 /// refusing the write were one decision in one place, and a client that lied
 /// about being unlocked was still refused by the database.
 ///

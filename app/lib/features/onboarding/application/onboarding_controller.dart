@@ -1,8 +1,6 @@
-import 'package:budgetwise/core/money/allocation.dart';
-import 'package:budgetwise/core/money/money.dart';
 import 'package:budgetwise/core/providers.dart';
-import 'package:budgetwise/core/time/period.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// The answers gathered while setting up a month, and everything derived from

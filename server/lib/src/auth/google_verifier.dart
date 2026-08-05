@@ -32,7 +32,7 @@ class GoogleAuthException implements Exception {
 
 /// Verifies Google ID tokens.
 ///
-/// Under Supabase this was the platform's job. Now it is ours, and it is the
+/// With a hosted auth vendor this is the platform’s job. Here it is ours, and it is the
 /// single most security-sensitive function in the codebase: it is the only thing
 /// deciding whether a caller is who they claim to be.
 ///
