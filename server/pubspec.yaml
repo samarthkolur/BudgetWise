@@ -1,0 +1,21 @@
+name: budgetwise_server
+description: BudgetWise API — MongoDB-backed, Google-authenticated.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  budgetwise_domain:
+    path: ../packages/budgetwise_domain
+  crypto: ^3.0.6
+  dart_jsonwebtoken: ^3.2.0
+  http: ^1.2.2
+  mongo_dart: ^0.10.3
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+
+dev_dependencies:
+  test: ^1.25.0
+  very_good_analysis: ^9.0.0
