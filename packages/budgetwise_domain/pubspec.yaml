@@ -1,0 +1,15 @@
+name: budgetwise_domain
+description: Money, periods and budget arithmetic, shared by the app and the API.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  intl: ^0.20.3
+  meta: ^1.19.0
+
+dev_dependencies:
+  test: ^1.25.0
+  very_good_analysis: ^9.0.0
