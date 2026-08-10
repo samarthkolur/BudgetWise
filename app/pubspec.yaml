@@ -15,6 +15,7 @@ environment:
 #   http + flutter_secure_storage  — the API client and its session tokens
 #   flutter_riverpod + go_router      — state and routing
 #   excel / csv / pdf / share_plus    — the PRD's Excel-replacement exports
+#   sqflite + uuid                    — local-first storage, no server required
 dependencies:
   budgetwise_domain:
     path: ../packages/budgetwise_domain
@@ -30,14 +31,21 @@ dependencies:
   google_sign_in: ^7.2.0
   http: ^1.6.0
   intl: ^0.20.3
+  path: ^1.9.0
   path_provider: ^2.1.5
   pdf: ^3.12.0
   share_plus: ^12.0.2
+  sqflite: ^2.4.2
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   mocktail: ^1.0.4
+  # In-memory SQLite for testing the local repositories without a device —
+  # the same pattern flutter_secure_storage's tests would need for a real
+  # backend, applied to sqflite.
+  sqflite_common_ffi: ^2.3.4+4
   very_good_analysis: ^9.0.0
 
 flutter:
