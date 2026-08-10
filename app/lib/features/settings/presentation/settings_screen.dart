@@ -1,7 +1,11 @@
 import 'package:budgetwise/core/providers.dart';
+import 'package:budgetwise/core/router/routes.dart';
+import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -9,6 +13,7 @@ class SettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profile = ref.watch(profileProvider);
+    final isSignedIn = ref.watch(isSignedInProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -20,91 +25,97 @@ class SettingsScreen extends ConsumerWidget {
           if (data == null) return const SizedBox.shrink();
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+            padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.xl, Gap.lg, Gap.xxl),
             children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundImage: data.avatarUrl == null
-                            ? null
-                            : NetworkImage(data.avatarUrl!),
-                        child: data.avatarUrl == null
-                            ? Text(
-                                data.firstName.characters.first.toUpperCase(),
-                                style: theme.textTheme.titleLarge,
-                              )
-                            : null,
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              data.displayName ?? 'BudgetWise user',
-                              style: theme.textTheme.titleMedium,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              data.email ?? '',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundImage: data.avatarUrl == null
+                        ? null
+                        : NetworkImage(data.avatarUrl!),
+                    child: data.avatarUrl == null
+                        ? Icon(
+                            isSignedIn ? Icons.person_outline : Icons.phone_iphone,
+                            size: 24,
+                          )
+                        : null,
                   ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Card(
-                child: Column(
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.currency_rupee),
-                      title: const Text('Currency'),
-                      trailing: Text(data.currency),
-                    ),
-                    const Divider(height: 1),
-                    ListTile(
-                      leading: const Icon(Icons.lock_outline),
-                      title: const Text('Investing'),
-                      trailing: Text(
-                        data.isInvestingUnlocked ? 'Unlocked' : 'Locked',
-                        style: TextStyle(
-                          color: data.isInvestingUnlocked
-                              ? theme.colorScheme.primary
-                              : theme.colorScheme.onSurfaceVariant,
+                  Gap.w16,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data.displayName ?? 'BudgetWise user',
+                          style: theme.textTheme.titleMedium,
                         ),
+                        const SizedBox(height: 2),
+                        Text(
+                          isSignedIn
+                              ? (data.email ?? '')
+                              : 'On this device only',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              Gap.h28,
+              ListSection(
+                children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.currency_rupee),
+                    title: const Text('Currency'),
+                    trailing: Text(
+                      data.currency,
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Investing'),
+                    trailing: Text(
+                      data.isInvestingUnlocked ? 'Unlocked' : 'Locked',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: data.isInvestingUnlocked
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 18),
-              Card(
-                child: ListTile(
+              Gap.h28,
+              if (isSignedIn)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
                   leading: Icon(Icons.logout, color: theme.colorScheme.error),
                   title: Text(
                     'Sign out',
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
                   onTap: () => _signOut(context, ref),
+                )
+              else
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.sync_outlined,
+                    color: theme.colorScheme.primary,
+                  ),
+                  title: const Text('Sign in with Google'),
+                  subtitle: const Text('Optional — back up and sync later'),
+                  onTap: () => context.push(Routes.signIn),
                 ),
-              ),
-              const SizedBox(height: 24),
+              Gap.h28,
               Center(
                 child: Text(
                   'BudgetWise · Earn → Save → Invest → Spend',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  style: theme.textTheme.bodySmall,
                 ),
               ),
             ],

@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 class OnboardingState {
   const OnboardingState({
     required this.period,
+    this.displayName = '',
     this.income = const Money.zero(),
     this.savingsMode = SavingsMode.percent,
     this.savingsPercent = 20,
@@ -22,6 +23,7 @@ class OnboardingState {
   });
 
   final Period period;
+  final String displayName;
   final Money income;
   final SavingsMode savingsMode;
   final double savingsPercent;
@@ -55,7 +57,11 @@ class OnboardingState {
 
   bool get isBalanced => remainingPercent.abs() < 0.01;
 
-  bool get canSubmit => income.isPositive && isBalanced && !isSubmitting;
+  bool get canSubmit =>
+      displayName.trim().isNotEmpty &&
+      income.isPositive &&
+      isBalanced &&
+      !isSubmitting;
 
   /// The concrete split, using largest-remainder so the parts sum to exactly
   /// [spendable]. The database refuses anything else.
@@ -72,6 +78,7 @@ class OnboardingState {
       spendable.percent(categoryPercents[categoryKey] ?? 0);
 
   OnboardingState copyWith({
+    String? displayName,
     Money? income,
     SavingsMode? savingsMode,
     double? savingsPercent,
@@ -81,6 +88,7 @@ class OnboardingState {
     bool? isSubmitting,
   }) => OnboardingState(
     period: period,
+    displayName: displayName ?? this.displayName,
     income: income ?? this.income,
     savingsMode: savingsMode ?? this.savingsMode,
     savingsPercent: savingsPercent ?? this.savingsPercent,
@@ -95,11 +103,17 @@ class OnboardingController extends Notifier<OnboardingState> {
   @override
   OnboardingState build() => OnboardingState(
     period: Period.current(),
+    // Pre-filled when a name already exists (a signed-in Google account) so
+    // the step only asks for what it doesn't already know.
+    displayName: ref.read(profileProvider).value?.displayName ?? '',
     categoryPercents: {
       for (final template in kDefaultCategories)
         template.key: template.defaultPercent,
     },
   );
+
+  void setDisplayName(String value) =>
+      state = state.copyWith(displayName: value);
 
   void setIncome(Money value) => state = state.copyWith(income: value);
 
@@ -112,59 +126,29 @@ class OnboardingController extends Notifier<OnboardingState> {
   void setSavingsFixed(Money amount) =>
       state = state.copyWith(savingsFixed: amount);
 
-  /// Moves one category and absorbs the difference across the others.
+  /// Moves one category and nothing else.
   ///
-  /// Without this the user has to make the numbers reach 100 by hand, which is
-  /// exactly the spreadsheet arithmetic the product exists to remove. Categories
-  /// at zero are left alone — a deliberate zero is a decision, and silently
-  /// refilling it would undo it.
+  /// Earlier versions of this screen absorbed the change proportionally
+  /// across every other category, so dragging one slider visibly moved eight
+  /// others at once — precise entry was impossible and the result felt
+  /// unpredictable. A category is a tag you turn on and set an amount for,
+  /// not a cell in a spreadsheet that recalculates its neighbours. The
+  /// remaining-to-assign banner is what tells the user where they stand, the
+  /// same way it always has; getting to zero is now something they do on
+  /// purpose rather than something that happens as a side effect of touching
+  /// something else.
   void setCategoryPercent(String key, double percent) {
     final next = Map<String, double>.from(state.categoryPercents);
-    final previous = next[key] ?? 0;
-    final clamped = percent.clamp(0.0, 100.0);
-    next[key] = clamped;
-
-    final delta = clamped - previous;
-    if (delta.abs() < 0.001) {
-      state = state.copyWith(categoryPercents: next);
-      return;
-    }
-
-    final others = next.keys.where((k) => k != key && next[k]! > 0).toList();
-    if (others.isEmpty) {
-      state = state.copyWith(categoryPercents: next);
-      return;
-    }
-
-    // Take proportionally from the others, so a large category absorbs more of
-    // the change than a small one.
-    final otherTotal = others.fold<double>(0, (a, k) => a + next[k]!);
-    if (otherTotal <= 0) {
-      state = state.copyWith(categoryPercents: next);
-      return;
-    }
-
-    for (final other in others) {
-      final share = next[other]! / otherTotal;
-      next[other] = (next[other]! - delta * share).clamp(0.0, 100.0);
-    }
-
-    // Rounding leaves a fraction of a point; put it on the largest category so
-    // the total lands exactly on 100.
-    final total = next.values.fold<double>(0, (a, b) => a + b);
-    final drift = 100 - total;
-    if (drift.abs() > 0.001) {
-      final largest = next.entries
-          .where((e) => e.key != key)
-          .reduce((a, b) => a.value >= b.value ? a : b);
-      next[largest.key] = (largest.value + drift).clamp(0.0, 100.0);
-    }
-
-    for (final entry in next.entries) {
-      next[entry.key] = double.parse(entry.value.toStringAsFixed(2));
-    }
-
+    next[key] = double.parse(percent.clamp(0.0, 100.0).toStringAsFixed(2));
     state = state.copyWith(categoryPercents: next);
+  }
+
+  /// Sets a category directly from a typed rupee amount rather than a
+  /// percentage — the two are the same number, expressed the way the user
+  /// happened to think of it.
+  void setCategoryAmount(String key, Money amount) {
+    if (state.spendable.isZero) return;
+    setCategoryPercent(key, amount.ratioOf(state.spendable) * 100);
   }
 
   /// Reuses last month's split. Percentages carry; amounts do not — they are
@@ -209,6 +193,9 @@ class OnboardingController extends Notifier<OnboardingState> {
             allocations: state.allocations,
             carriedFrom: state.carriedFrom,
           );
+      await ref
+          .read(profileRepositoryProvider)
+          .updateProfile(displayName: state.displayName.trim());
       await ref.read(profileRepositoryProvider).completeOnboarding();
       ref
         ..refreshBudgetData()

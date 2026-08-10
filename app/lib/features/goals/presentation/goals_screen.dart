@@ -1,5 +1,8 @@
 import 'package:budgetwise/core/providers.dart';
+import 'package:budgetwise/core/theme/app_theme.dart';
+import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
@@ -29,7 +32,7 @@ class GoalsScreen extends ConsumerWidget {
         builder: (list) {
           if (list.isEmpty) {
             return EmptyView(
-              icon: '🎯',
+              icon: Icons.flag_outlined,
               title: 'No goals yet',
               message:
                   'A laptop, an emergency fund, a trip — give your savings '
@@ -43,13 +46,13 @@ class GoalsScreen extends ConsumerWidget {
 
           final active = list.where((g) => g.status != 'abandoned').toList();
 
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-            itemCount: active.length,
-            itemBuilder: (context, index) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _GoalCard(goal: active[index]),
-            ),
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, 96),
+            children: [
+              ListSection(
+                children: [for (final goal in active) _GoalCard(goal: goal)],
+              ),
+            ],
           );
         },
       ),
@@ -65,76 +68,71 @@ class _GoalCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(goal.icon ?? '🎯', style: const TextStyle(fontSize: 22)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    goal.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (goal.isAchieved)
-                  Chip(
-                    label: const Text('Achieved'),
-                    backgroundColor: theme.colorScheme.primaryContainer,
-                    visualDensity: VisualDensity.compact,
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(5),
-              child: LinearProgressIndicator(
-                value: goal.progress,
-                minHeight: 8,
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconBadge(
+                icon: goal.isAchieved
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.flag_outlined,
+                tone: goal.isAchieved ? scheme.healthy : null,
               ),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '${goal.saved.formatCompact()} of ${goal.target.formatCompact()}',
-                  style: theme.textTheme.bodyMedium,
+              Gap.w12,
+              Expanded(
+                child: Text(
+                  goal.title,
+                  style: theme.textTheme.titleMedium,
                 ),
-                Text(
-                  '${(goal.progress * 100).toStringAsFixed(0)}%',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              if (goal.isAchieved)
+                TonePill(
+                  label: 'Achieved',
+                  tone: scheme.healthy,
+                  icon: Icons.check_rounded,
                 ),
-              ],
-            ),
-            if (!goal.isAchieved) ...[
-              const SizedBox(height: 12),
-              _GoalProjection(goal: goal),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton(
-                  onPressed: () => _showContributeSheet(context, ref, goal),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 38),
-                  ),
-                  child: const Text('Add money'),
+            ],
+          ),
+          Gap.h16,
+          FlatBar(value: goal.progress, color: scheme.primary),
+          Gap.h8,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                '${goal.saved.formatCompact()} of ${goal.target.formatCompact()}',
+                style: theme.textTheme.bodyMedium?.money,
+              ),
+              Text(
+                '${(goal.progress * 100).toStringAsFixed(0)}%',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ],
+          ),
+          if (!goal.isAchieved) ...[
+            Gap.h12,
+            _GoalProjection(goal: goal),
+            Gap.h12,
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton(
+                onPressed: () => _showContributeSheet(context, ref, goal),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(0, 38),
+                ),
+                child: const Text('Add money'),
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -166,23 +164,15 @@ class _GoalProjection extends StatelessWidget {
         'Add a monthly amount to see a completion date',
     ];
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final line in lines)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(line, style: theme.textTheme.bodySmall),
-            ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in lines)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(line, style: theme.textTheme.bodySmall),
+          ),
+      ],
     );
   }
 }
@@ -345,7 +335,14 @@ Future<void> _showContributeSheet(
               FilteringTextInputFormatter.allow(RegExp('[0-9.]')),
             ],
             style: Theme.of(sheetContext).textTheme.headlineMedium,
-            decoration: const InputDecoration(prefixText: '₹ ', hintText: '0'),
+            decoration: InputDecoration(
+              prefixText: '₹ ',
+              hintText: '0',
+              hintStyle: Theme.of(sheetContext).textTheme.headlineMedium
+                  ?.copyWith(
+                    color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
+                  ),
+            ),
           ),
           const SizedBox(height: 20),
           FilledButton(

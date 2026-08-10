@@ -1,4 +1,5 @@
 import 'package:budgetwise/core/providers.dart';
+import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
@@ -162,9 +163,9 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
           const SizedBox(height: 18),
           Text(
             _isEditing ? 'Edit expense' : 'Add expense',
-            style: theme.textTheme.titleLarge,
+            style: theme.textTheme.titleMedium,
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 22),
 
           TextField(
             controller: _amount,
@@ -173,16 +174,25 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp('[0-9.]')),
             ],
-            style: theme.textTheme.headlineMedium?.copyWith(
+            style: theme.textTheme.displaySmall?.money.copyWith(
               fontWeight: FontWeight.w600,
             ),
             decoration: InputDecoration(
               prefixText: '₹ ',
               hintText: '0',
+              hintStyle: theme.textTheme.displaySmall?.money.copyWith(
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               errorText: _amountError,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: false,
+              contentPadding: EdgeInsets.zero,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 22),
 
           Text('Category', style: theme.textTheme.labelLarge),
           const SizedBox(height: 8),
@@ -198,7 +208,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
               children: [
                 for (final category in list)
                   ChoiceChip(
-                    label: Text('${category.icon} ${category.name}'),
+                    label: Text(category.name),
                     selected: _categoryId == category.id,
                     onSelected: (_) =>
                         setState(() => _categoryId = category.id),
@@ -230,7 +240,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
                     for (final method in PaymentMethod.values)
                       DropdownMenuItem(
                         value: method,
-                        child: Text('${method.icon} ${method.label}'),
+                        child: Text(method.label),
                       ),
                   ],
                   onChanged: (value) =>

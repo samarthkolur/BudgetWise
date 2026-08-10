@@ -1,5 +1,9 @@
 import 'package:budgetwise/core/providers.dart';
+import 'package:budgetwise/core/theme/app_theme.dart';
+import 'package:budgetwise/core/widgets/advisor_card.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/score_ring.dart';
 import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/insights/domain/insight_rules.dart';
@@ -24,7 +28,7 @@ class InsightsScreen extends ConsumerWidget {
         builder: (data) {
           if (data == null) {
             return const EmptyView(
-              icon: '📈',
+              icon: Icons.insights_outlined,
               title: 'Nothing to analyse yet',
               message: 'Set up this month to see how you are doing.',
             );
@@ -69,22 +73,18 @@ class _InsightsBody extends ConsumerWidget {
         final insights = generateInsights(summary: summary, categories: list);
 
         return ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.xxl),
           children: [
             _HealthScoreCard(score: score),
-            const SizedBox(height: 14),
+            Gap.h28,
             _InvestingCard(claim: unlock.value),
-            const SizedBox(height: 20),
-            Text(
-              'What we noticed',
-              style: Theme.of(context).textTheme.titleMedium,
+            Gap.h28,
+            const AdvisorHeader(subtitle: 'Based on your budget rules'),
+            ListSection(
+              children: [
+                for (final insight in insights) AdvisorCard(insight: insight),
+              ],
             ),
-            const SizedBox(height: 8),
-            for (final insight in insights)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _InsightCard(insight: insight),
-              ),
           ],
         );
       },
@@ -101,78 +101,49 @@ class _HealthScoreCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '${score.score}',
-                  style: theme.textTheme.displayMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10, left: 4),
-                  child: Text('/ 100', style: theme.textTheme.titleMedium),
-                ),
-                const Spacer(),
-                Chip(
-                  label: Text(score.band),
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Financial health this month',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 16),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Center(
+          child: ScoreRing(score: score.score, label: score.band),
+        ),
+        Gap.h16,
+        Center(
+          child: Text(
+            'Financial health this month',
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+        Gap.h28,
 
-            // The breakdown, because a score with no explanation is a grade —
-            // and the PRD asked for motivation, not grading.
-            for (final component in score.components)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        // The breakdown, because a score with no explanation is a grade —
+        // and the PRD asked for motivation, not grading.
+        for (final component in score.components)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Gap.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(component.label, style: theme.textTheme.bodySmall),
-                        Text(
-                          '${component.earned.round()}/${component.available.round()}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: LinearProgressIndicator(
-                        value: component.ratio,
-                        minHeight: 5,
-                        backgroundColor:
-                            theme.colorScheme.surfaceContainerHighest,
-                      ),
+                    Text(component.label, style: theme.textTheme.bodySmall),
+                    Text(
+                      '${component.earned.round()}/${component.available.round()}',
+                      style: theme.textTheme.labelSmall,
                     ),
                   ],
                 ),
-              ),
-          ],
-        ),
-      ),
+                Gap.h4,
+                FlatBar(
+                  value: component.ratio,
+                  color: theme.colorScheme.primary,
+                  height: 4,
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -195,112 +166,53 @@ class _InvestingCard extends StatelessWidget {
 
     final isUnlocked = data.isUnlocked;
     final streak = data.streakMonths;
-    final progress = data.progress;
     final monthsLeft = data.monthsRemaining;
 
-    return Card(
-      color: isUnlocked ? theme.colorScheme.primaryContainer : null,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Text(
-                  isUnlocked ? '📈' : '🔒',
-                  style: const TextStyle(fontSize: 20),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    isUnlocked
-                        ? 'Investing is unlocked'
-                        : 'Investing is locked',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
+            Icon(
               isUnlocked
-                  ? 'You built the habit first. Investing features are available '
-                        'from here on.'
-                  : 'Save consistently for six months, or build three months of '
-                        'essential expenses as an emergency fund.',
-              style: theme.textTheme.bodySmall,
+                  ? Icons.trending_up_rounded
+                  : Icons.lock_outline_rounded,
+              size: 18,
+              color: isUnlocked
+                  ? theme.colorScheme.healthy
+                  : theme.colorScheme.onSurfaceVariant,
             ),
-            if (!isUnlocked) ...[
-              const SizedBox(height: 12),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 6,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '$streak of 6 months saved'
-                '${monthsLeft > 0 ? " · $monthsLeft to go" : ""}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InsightCard extends StatelessWidget {
-  const _InsightCard({required this.insight});
-
-  final Insight insight;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    final (icon, background) = switch (insight.tone) {
-      InsightTone.warning => ('⚠️', theme.colorScheme.tertiaryContainer),
-      InsightTone.celebration => ('🎉', theme.colorScheme.primaryContainer),
-      InsightTone.info => ('💡', theme.colorScheme.surfaceContainerLow),
-    };
-
-    return Card(
-      color: background,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(icon, style: const TextStyle(fontSize: 18)),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    insight.title,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(insight.body, style: theme.textTheme.bodySmall),
-                ],
+              child: Text(
+                isUnlocked ? 'Investing is unlocked' : 'Investing is locked',
+                style: theme.textTheme.titleSmall,
               ),
             ),
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        Text(
+          isUnlocked
+              ? 'You built the habit first. Investing features are available '
+                    'from here on.'
+              : 'Save consistently for six months, or build three months of '
+                    'essential expenses as an emergency fund.',
+          style: theme.textTheme.bodySmall,
+        ),
+        if (!isUnlocked) ...[
+          Gap.h16,
+          // Dots rather than a bar: "4 of 6" is something a person can
+          // finish, where a percentage is just a number moving.
+          StreakDots(completed: streak),
+          Gap.h8,
+          Text(
+            '$streak of 6 months saved'
+            '${monthsLeft > 0 ? " · $monthsLeft to go" : ""}',
+            style: theme.textTheme.labelSmall,
+          ),
+        ],
+      ],
     );
   }
 }

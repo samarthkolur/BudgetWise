@@ -1,5 +1,6 @@
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
+import 'package:budgetwise/core/theme/category_icons.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
@@ -33,76 +34,77 @@ class CategoryCard extends StatelessWidget {
     final status = scheme.statusColor(progress.status);
     final isExceeded = progress.isExceeded;
 
-    return BentoTile(
+    return InkWell(
       onTap: onTap,
-      tone: isExceeded ? scheme.exceeded : null,
-      padding: const EdgeInsets.all(Gap.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              // A tinted glyph square rather than a bare emoji: it gives every
-              // row the same left edge whatever the icon's width.
-              Container(
-                width: 36,
-                height: 36,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(11),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Gap.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconBadge(
+                  icon: categoryIconFor(category.key),
+                  tone: isExceeded ? status : null,
+                  size: 36,
+                  iconSize: 17,
                 ),
-                child: Text(
-                  category.icon,
-                  style: const TextStyle(fontSize: 17),
+                Gap.w12,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(category.name, style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 1),
+                      Text(
+                        '${category.spent.formatCompact()} of ${category.allocated.formatCompact()}',
+                        style: theme.textTheme.bodySmall?.money,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Gap.w12,
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Gap.w8,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(category.name, style: theme.textTheme.titleSmall),
+                    Text(
+                      isExceeded
+                          ? '−${progress.overspend.formatCompact()}'
+                          : progress.remaining.formatCompact(),
+                      style: theme.textTheme.titleSmall?.money.copyWith(
+                        color: status,
+                      ),
+                    ),
                     const SizedBox(height: 1),
                     Text(
-                      '${category.spent.formatCompact()} of ${category.allocated.formatCompact()}',
-                      style: theme.textTheme.bodySmall?.money,
+                      isExceeded ? 'over' : 'left',
+                      style: theme.textTheme.labelSmall,
                     ),
                   ],
                 ),
-              ),
-              Gap.w8,
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    isExceeded
-                        ? '−${progress.overspend.formatCompact()}'
-                        : progress.remaining.formatCompact(),
-                    style: theme.textTheme.titleSmall?.money.copyWith(
-                      color: status,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    isExceeded ? 'over' : 'left',
-                    style: theme.textTheme.labelSmall,
+                if (onTap != null) ...[
+                  Gap.w4,
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
                   ),
                 ],
+              ],
+            ),
+            Gap.h12,
+            FlatBar(value: progress.displayRatio, color: status, height: 4),
+            if (suggestion != null) ...[
+              Gap.h8,
+              _Suggestion(
+                suggestion: suggestion!,
+                sourceName:
+                    categoryNames[suggestion!.fromKey] ?? suggestion!.fromKey,
               ),
             ],
-          ),
-          Gap.h12,
-          FlatBar(value: progress.displayRatio, color: status, height: 5),
-          if (suggestion != null) ...[
-            Gap.h12,
-            _Suggestion(
-              suggestion: suggestion!,
-              sourceName:
-                  categoryNames[suggestion!.fromKey] ?? suggestion!.fromKey,
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -119,27 +121,19 @@ class _Suggestion extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: Gap.md, vertical: 10),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(13),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.auto_awesome_outlined, size: 14, color: scheme.advisory),
-          Gap.w8,
-          Expanded(
-            child: Text(
-              '$sourceName has ${suggestion.availableAtSource.formatCompact()} spare — '
-              'you could move ${suggestion.amount.formatCompact()} across.',
-              style: theme.textTheme.bodySmall,
-            ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.auto_awesome_outlined, size: 14, color: scheme.advisory),
+        Gap.w8,
+        Expanded(
+          child: Text(
+            '$sourceName has ${suggestion.availableAtSource.formatCompact()} spare — '
+            'you could move ${suggestion.amount.formatCompact()} across.',
+            style: theme.textTheme.bodySmall,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
