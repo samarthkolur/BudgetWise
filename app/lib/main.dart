@@ -1,6 +1,7 @@
 import 'package:budgetwise/core/env/env.dart';
 import 'package:budgetwise/core/router/app_router.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,6 +28,7 @@ class BudgetWiseApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      scrollBehavior: AppScrollBehavior(),
       routerConfig: ref.watch(routerProvider),
     );
   }
