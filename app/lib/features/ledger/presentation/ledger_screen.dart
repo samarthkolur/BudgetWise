@@ -5,6 +5,7 @@ import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/theme/category_icons.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/expenses/presentation/expense_sheet.dart';
 import 'package:budgetwise/features/export/data/export_service.dart';
@@ -42,14 +43,6 @@ class LedgerScreen extends ConsumerWidget {
             ),
           ),
         ),
-        actions: [
-          if (summary.value != null)
-            IconButton(
-              icon: const Icon(Icons.ios_share),
-              tooltip: 'Export',
-              onPressed: () => _showExportSheet(context, ref, summary.value!),
-            ),
-        ],
       ),
       body: Column(
         children: [
@@ -156,6 +149,7 @@ class _LedgerBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final categories = ref.watch(categoriesProvider(summary.budgetId));
     final expenses = ref.watch(expensesProvider(summary.budgetId));
 
@@ -169,82 +163,105 @@ class _LedgerBody extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.xxl),
       children: [
-        Container(
-          padding: const EdgeInsets.all(Gap.lg),
-          decoration: BoxDecoration(
-            color: Color.alphaBlend(
-              theme.colorScheme.primary.withValues(alpha: 0.06),
-              theme.colorScheme.surfaceContainerLow,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: theme.colorScheme.primary.withValues(alpha: 0.14),
-            ),
-          ),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryStat(
-                      label: 'Income',
-                      value: summary.income.format(),
-                    ),
-                  ),
-                  Expanded(
-                    child: _SummaryStat(
-                      label: 'Savings target',
-                      value: summary.savingsTarget.format(),
-                      tone: theme.colorScheme.primary,
-                    ),
-                  ),
-                  Expanded(
-                    child: _SummaryStat(
-                      label: 'Savings actual',
-                      value: summary.savedActual.format(),
-                    ),
-                  ),
-                ],
+        Row(
+          children: [
+            Expanded(
+              child: MiniStatCard(
+                label: 'INCOME',
+                value: summary.income.formatCompact(),
               ),
-              Gap.h20,
-              Divider(height: 1, color: theme.colorScheme.outlineVariant),
-              Gap.h20,
-              Row(
-                children: [
-                  Expanded(
-                    child: _SummaryStat(
-                      label: 'Spendable',
-                      value: summary.spendable.format(),
-                      footnote: 'Income − savings target',
+            ),
+            Gap.w8,
+            Expanded(
+              child: MiniStatCard(
+                label: 'SAVINGS TARGET',
+                value: summary.savingsTarget.formatCompact(),
+                tone: scheme.primary,
+              ),
+            ),
+            Gap.w8,
+            Expanded(
+              child: MiniStatCard(
+                label: 'SAVINGS ACTUAL',
+                value: summary.savedActual.formatCompact(),
+              ),
+            ),
+          ],
+        ),
+        Gap.h8,
+        Row(
+          children: [
+            Expanded(
+              child: MiniStatCard(
+                label: 'SPENDABLE',
+                value: summary.spendable.formatCompact(),
+                footnote: 'Income − savings',
+              ),
+            ),
+            Gap.w8,
+            Expanded(
+              child: MiniStatCard(
+                label: 'SPENT',
+                value: summary.spent.formatCompact(),
+                footnote: '$spentRatio% of spendable',
+              ),
+            ),
+            Gap.w8,
+            Expanded(
+              child: MiniStatCard(
+                label: 'REMAINING',
+                value: summary.remaining.formatCompact(),
+                tone: scheme.primary,
+                footnote: '$remainingRatio% left',
+              ),
+            ),
+          ],
+        ),
+        Gap.h16,
+
+        Row(
+          children: [
+            for (final format in _ExportFormat.values) ...[
+              if (format != _ExportFormat.values.first) Gap.w8,
+              Expanded(
+                child: PressableScale.onTap(
+                  onTap: () => _runExport(context, ref, summary, format),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: AppTheme.card(scheme, radius: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          format.icon,
+                          size: 16,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        Gap.h4,
+                        Text(
+                          format.label,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: scheme.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Expanded(
-                    child: _SummaryStat(
-                      label: 'Spent',
-                      value: summary.spent.format(),
-                      footnote: '$spentRatio% of spendable',
-                    ),
-                  ),
-                  Expanded(
-                    child: _SummaryStat(
-                      label: 'Remaining',
-                      value: summary.remaining.format(),
-                      tone: theme.colorScheme.primary,
-                      footnote: '$remainingRatio% left',
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
-          ),
+          ],
         ),
+
         Gap.h28,
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text('Allocations', style: theme.textTheme.titleMedium),
             OutlinedButton.icon(
-              onPressed: () => context.go(Routes.insights),
+              onPressed: () => context.push(Routes.insights),
               style: OutlinedButton.styleFrom(
                 shape: const StadiumBorder(),
                 minimumSize: const Size(0, 36),
@@ -260,33 +277,37 @@ class _LedgerBody extends ConsumerWidget {
         AsyncView(
           value: categories,
           loading: const LinearProgressIndicator(),
-          builder: (list) => ListSection(
-            children: [
-              for (final category in list)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  leading: IconBadge(
-                    icon: categoryIconFor(category.key),
-                    size: 34,
-                    iconSize: 16,
-                  ),
-                  title: Text(category.name),
-                  subtitle: Text(
-                    '${category.spent.formatCompact()} of ${category.allocated.formatCompact()}',
-                  ),
-                  trailing: Text(
-                    category.progress.isExceeded
-                        ? '−${category.progress.overspend.formatCompact()}'
-                        : category.progress.remaining.formatCompact(),
-                    style: theme.textTheme.bodyMedium?.money.copyWith(
-                      color: category.progress.isExceeded
-                          ? theme.colorScheme.error
-                          : null,
+          builder: (list) => Container(
+            padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+            decoration: AppTheme.card(scheme),
+            child: ListSection(
+              children: [
+                for (final category in list)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    dense: true,
+                    leading: IconBadge(
+                      icon: categoryIconFor(category.key),
+                      size: 34,
+                      iconSize: 16,
+                    ),
+                    title: Text(category.name),
+                    subtitle: Text(
+                      '${category.spent.formatCompact()} of ${category.allocated.formatCompact()}',
+                    ),
+                    trailing: Text(
+                      category.progress.isExceeded
+                          ? '−${category.progress.overspend.formatCompact()}'
+                          : category.progress.remaining.formatCompact(),
+                      style: theme.textTheme.bodyMedium?.money.copyWith(
+                        color: category.progress.isExceeded
+                            ? theme.colorScheme.error
+                            : null,
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
         Gap.h16,
@@ -318,12 +339,7 @@ class _LedgerBody extends ConsumerWidget {
                 message: 'Expenses you record will appear here.',
               );
             }
-            return ListSection(
-              children: [
-                for (final expense in list)
-                  _ExpenseTile(expense: expense, budgetId: summary.budgetId),
-              ],
-            );
+            return _TransactionGroups(list: list, budgetId: summary.budgetId);
           },
         ),
       ],
@@ -331,54 +347,58 @@ class _LedgerBody extends ConsumerWidget {
   }
 }
 
-/// One cell of the summary card: label, value, optional footnote — the
-/// building block of the income/savings/spending grid.
-class _SummaryStat extends StatelessWidget {
-  const _SummaryStat({
-    required this.label,
-    required this.value,
-    this.tone,
-    this.footnote,
-  });
+/// Transactions, grouped under a day heading. `list` already arrives sorted
+/// most-recent-first (the repository's own order), so grouping only needs to
+/// notice when the day changes, not re-sort.
+class _TransactionGroups extends StatelessWidget {
+  const _TransactionGroups({required this.list, required this.budgetId});
 
-  final String label;
-  final String value;
-  final Color? tone;
-  final String? footnote;
+  final List<Expense> list;
+  final String budgetId;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final groups = <String, List<Expense>>{};
+    for (final expense in list) {
+      groups.putIfAbsent(_dayLabel(expense.spentOn), () => []).add(expense);
+    }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelMedium,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        Gap.h4,
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            value,
-            style: theme.textTheme.titleMedium?.money.copyWith(
-              color: tone ?? theme.colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
+        for (final entry in groups.entries) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(Gap.xs, 0, Gap.xs, Gap.sm),
+            child: Text(
+              entry.key.toUpperCase(),
+              style: theme.textTheme.labelMedium,
             ),
           ),
-        ),
-        if (footnote != null)
-          Text(
-            footnote!,
-            style: theme.textTheme.labelSmall,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+            margin: const EdgeInsets.only(bottom: Gap.lg),
+            decoration: AppTheme.card(scheme),
+            child: ListSection(
+              children: [
+                for (final expense in entry.value)
+                  _ExpenseTile(expense: expense, budgetId: budgetId),
+              ],
+            ),
           ),
+        ],
       ],
     );
+  }
+
+  static String _dayLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    if (day == today) return 'Today';
+    if (day == today.subtract(const Duration(days: 1))) return 'Yesterday';
+    return DateFormat('d MMMM').format(date);
   }
 }
 
@@ -425,6 +445,7 @@ class _ExpenseTile extends ConsumerWidget {
         try {
           await ref.read(expenseRepositoryProvider).delete(expense.id);
           ref.refreshBudgetData();
+          AppHaptics.warning();
         } on Object catch (error) {
           if (context.mounted) showFailure(context, error);
         }
@@ -436,57 +457,22 @@ class _ExpenseTile extends ConsumerWidget {
               ? expense.note!
               : expense.categoryName ?? 'Expense',
         ),
-        subtitle: Text([
-          DateFormat('d MMM').format(expense.spentOn),
-          if (expense.note?.isNotEmpty ?? false)
-            expense.categoryName ?? 'Uncategorised',
-          expense.paymentMethod.label,
-        ].join(' · ')),
+        subtitle: Text(
+          [
+            DateFormat('d MMM').format(expense.spentOn),
+            if (expense.note?.isNotEmpty ?? false)
+              expense.categoryName ?? 'Uncategorised',
+            expense.paymentMethod.label,
+          ].join(' · '),
+        ),
         trailing: Text(
           expense.amount.format(),
-          style: Theme.of(context).textTheme.bodyLarge?.money.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: Theme.of(context).textTheme.titleSmall?.money,
         ),
         onTap: () => showExpenseSheet(context, ref, budgetId, editing: expense),
       ),
     );
   }
-}
-
-Future<void> _showExportSheet(
-  BuildContext context,
-  WidgetRef ref,
-  BudgetSummary summary,
-) async {
-  await showModalBottomSheet<void>(
-    context: context,
-    useSafeArea: true,
-    builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          Text(
-            'Export ${summary.period.label}',
-            style: Theme.of(sheetContext).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          for (final format in _ExportFormat.values)
-            ListTile(
-              leading: Icon(format.icon, color: Theme.of(sheetContext).colorScheme.onSurfaceVariant),
-              title: Text(format.label),
-              subtitle: Text(format.description),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                _runExport(context, ref, summary, format);
-              },
-            ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    ),
-  );
 }
 
 enum _ExportFormat {
