@@ -2,19 +2,21 @@ import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/router/routes.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
-import 'package:budgetwise/core/widgets/advisor_card.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
+import 'package:budgetwise/core/widgets/score_ring.dart';
+import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/auth/domain/profile.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/dashboard/presentation/widgets/category_card.dart';
 import 'package:budgetwise/features/dashboard/presentation/widgets/savings_reminder_card.dart';
 import 'package:budgetwise/features/expenses/presentation/expense_sheet.dart';
-import 'package:budgetwise/features/insights/domain/insight_rules.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 /// The home screen.
 ///
@@ -48,7 +50,7 @@ class DashboardScreen extends ConsumerWidget {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(Gap.lg, 0, Gap.lg, Gap.xxl),
                 children: [
-                  _Greeting(profile: profile, period: period),
+                  _Greeting(profile: profile),
                   _DashboardBody(summary: data),
                 ],
               ),
@@ -61,10 +63,9 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 class _Greeting extends StatelessWidget {
-  const _Greeting({required this.profile, required this.period});
+  const _Greeting({required this.profile});
 
   final Profile? profile;
-  final Period period;
 
   @override
   Widget build(BuildContext context) {
@@ -86,28 +87,34 @@ class _Greeting extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  period.label.toUpperCase(),
-                  style: theme.textTheme.labelSmall,
-                ),
+                Text(part, style: theme.textTheme.bodyMedium),
                 const SizedBox(height: 2),
-                Text('$part, $name', style: theme.textTheme.headlineMedium),
+                Text(name, style: theme.textTheme.headlineMedium),
               ],
             ),
           ),
           Gap.w12,
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: scheme.surfaceContainerHigh,
-            backgroundImage: profile?.avatarUrl == null
-                ? null
-                : NetworkImage(profile!.avatarUrl!),
-            child: profile?.avatarUrl != null
-                ? null
-                : Text(
-                    name.characters.first.toUpperCase(),
-                    style: theme.textTheme.titleMedium,
-                  ),
+          PressableScale.onTap(
+            onTap: () {
+              AppHaptics.tap();
+              context.push(Routes.settings);
+            },
+            child: CircleAvatar(
+              radius: 22,
+              backgroundColor: scheme.surfaceContainerHigh,
+              backgroundImage: profile?.avatarUrl == null
+                  ? null
+                  : NetworkImage(profile!.avatarUrl!),
+              child: profile?.avatarUrl != null
+                  ? null
+                  : Text(
+                      name.characters.first.toUpperCase(),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontFamily: AppType.display,
+                        color: scheme.primary,
+                      ),
+                    ),
+            ),
           ),
         ],
       ),
@@ -120,81 +127,64 @@ class _DashboardBody extends ConsumerWidget {
 
   final BudgetSummary summary;
 
-  /// How many categories the glance view shows before "View all" takes over
-  /// — the ledger is the full record, this is a highlight reel.
-  static const _categoryPreviewCount = 4;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final categories = ref.watch(categoriesProvider(summary.budgetId));
-    final safe = summary.safeDaily();
+    final expenses = ref.watch(expensesProvider(summary.budgetId));
+    final unlock = ref.watch(investingStatusProvider).value;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Hero: the one number this screen exists for. A deliberately larger
-        // gap sets it apart as the screen's anchor.
         Gap.h8,
         _SafeToSpendFigure(summary: summary),
-        Gap.h28,
+        Gap.h16,
 
-        // The month at a glance, lined up rather than boxed.
-        StatRow(
+        Row(
           children: [
-            StatColumn(
-              icon: Icons.account_balance_wallet_outlined,
-              label: 'REMAINING',
-              value: summary.remaining.formatCompact(),
-              footnote: 'of ${summary.spendable.formatCompact()}',
+            Expanded(
+              child: MiniStatCard(
+                label: 'INCOME',
+                value: summary.income.formatCompact(),
+              ),
             ),
-            StatColumn(
-              icon: Icons.savings_outlined,
-              label: 'SAVED',
-              value: summary.savedActual.formatCompact(),
-              footnote: 'of ${summary.savingsTarget.formatCompact()}',
-              tone: summary.savingsOutstanding.isZero ? scheme.healthy : null,
+            Gap.w8,
+            Expanded(
+              child: MiniStatCard(
+                label: 'SAVED',
+                value: summary.savedActual.formatCompact(),
+                tone: scheme.primary,
+              ),
             ),
-            StatColumn(
-              icon: Icons.calendar_today_outlined,
-              label: 'DAYS LEFT',
-              value: '${safe.daysRemaining}',
-              footnote: 'in ${summary.period.shortLabel}',
+            Gap.w8,
+            Expanded(
+              child: MiniStatCard(
+                label: 'SPENT',
+                value: summary.spent.formatCompact(),
+                tone: scheme.warning,
+              ),
             ),
           ],
         ),
-        Gap.h28,
+        Gap.h16,
 
         SavingsReminderCard(summary: summary),
 
-        // Guidance sits above the raw detail: what to do about the numbers is
-        // worth more than the numbers themselves.
+        if (unlock != null && !unlock.isUnlocked) ...[
+          Gap.h16,
+          _InvestTeaserCard(unlock: unlock),
+        ],
+
+        Gap.h16,
         AsyncView(
           value: categories,
           loading: const SizedBox.shrink(),
-          builder: (list) {
-            final insights = generateInsights(summary: summary, categories: list);
-            if (insights.isEmpty) return const SizedBox.shrink();
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Gap.h28,
-                SectionHeader(
-                  title: 'Insights',
-                  trailing: insights.length > 2 ? 'View all' : null,
-                  action: insights.length > 2
-                      ? () => context.go(Routes.insights)
-                      : null,
-                ),
-                ListSection(
-                  children: [
-                    for (final insight in insights.take(2))
-                      AdvisorCard(insight: insight),
-                  ],
-                ),
-              ],
-            );
-          },
+          builder: (list) => _HealthScoreRow(
+            summary: summary,
+            categories: list,
+            unlock: unlock,
+          ),
         ),
 
         Gap.h28,
@@ -207,7 +197,7 @@ class _DashboardBody extends ConsumerWidget {
               return const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SectionHeader(title: 'Spending by category'),
+                  SectionHeader(title: 'Spending categories'),
                   EmptyView(
                     icon: Icons.category_outlined,
                     title: 'No categories',
@@ -216,33 +206,21 @@ class _DashboardBody extends ConsumerWidget {
                 ],
               );
             }
-            final byKey = {for (final c in list) c.key: c.progress};
-            final preview = list.take(_categoryPreviewCount).toList();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SectionHeader(
-                  title: 'Spending by category',
-                  trailing: list.length > _categoryPreviewCount
-                      ? 'View all'
-                      : null,
-                  action: list.length > _categoryPreviewCount
-                      ? () => context.go(Routes.ledger)
-                      : null,
-                ),
-                ListSection(
+                const SectionHeader(title: 'Spending categories'),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisSpacing: Gap.md,
+                  mainAxisSpacing: Gap.md,
+                  childAspectRatio: 1.5,
                   children: [
-                    for (final category in preview)
+                    for (final category in list)
                       CategoryCard(
                         category: category,
-                        categoryNames: {for (final c in list) c.key: c.name},
-                        suggestion: category.progress.isExceeded
-                            ? suggestReallocation(
-                                overspend: category.progress.overspend,
-                                categories: byKey,
-                                excludingKey: category.key,
-                              )
-                            : null,
                         onTap: () => showExpenseSheet(
                           context,
                           ref,
@@ -256,6 +234,39 @@ class _DashboardBody extends ConsumerWidget {
             );
           },
         ),
+
+        Gap.h28,
+        AsyncView(
+          value: expenses,
+          loading: const SizedBox.shrink(),
+          builder: (list) {
+            if (list.isEmpty) return const SizedBox.shrink();
+            final recent = list.take(3).toList();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SectionHeader(
+                  title: 'Recent activity',
+                  trailing: 'View ledger',
+                  action: () => context.go(Routes.ledger),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                  decoration: AppTheme.card(scheme),
+                  child: ListSection(
+                    children: [
+                      for (final expense in recent)
+                        _RecentExpenseRow(
+                          expense: expense,
+                          budgetId: summary.budgetId,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
       ],
     );
   }
@@ -263,89 +274,83 @@ class _DashboardBody extends ConsumerWidget {
 
 /// The hero figure.
 ///
-/// The one number the screen exists for, in a tinted card so it reads as the
-/// screen's anchor at a glance — scale, a tone-coloured number/label/bar, and
-/// now a border do that job together. The corner illustration is pure
-/// chrome, never a data source: it is fixed decoration, not a chart.
-class _SafeToSpendFigure extends ConsumerWidget {
+/// The one number the screen exists for, on a navy card so it reads as the
+/// screen's anchor at a glance.
+class _SafeToSpendFigure extends StatelessWidget {
   const _SafeToSpendFigure({required this.summary});
 
   final BudgetSummary summary;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final safe = summary.safeDaily();
-    final unlock = ref.watch(investingStatusProvider).value;
     final spentRatio = summary.spent.ratioOf(summary.spendable).clamp(0.0, 1.0);
     final tone = safe.isExhausted ? scheme.exceeded : scheme.primary;
 
     return Container(
       padding: const EdgeInsets.all(Gap.xl),
       decoration: BoxDecoration(
-        color: Color.alphaBlend(
-          tone.withValues(alpha: 0.08),
-          scheme.surfaceContainerLow,
-        ),
+        color: const Color(0xFF1B2340),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: tone.withValues(alpha: 0.18)),
+        boxShadow: AppTheme.cardShadow(Brightness.light),
       ),
-      child: Stack(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(right: -8, top: -8, child: _HeroDecoration(tone: tone)),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      safe.isExhausted
-                          ? 'NOTHING LEFT TO SPEND'
-                          : 'SAFE TO SPEND TODAY',
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: tone,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (unlock != null && unlock.streakMonths > 0)
-                    TonePill(
-                      label: '${unlock.streakMonths} mo streak',
-                      tone: scheme.primary,
-                      icon: Icons.local_fire_department_outlined,
-                    ),
-                ],
+          Text(
+            safe.isExhausted ? 'NOTHING LEFT TO SPEND' : 'SAFE TO SPEND TODAY',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1,
+            ),
+          ),
+          Gap.h8,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: AnimatedMoneyText(
+              value: safe.perDay,
+              style: theme.textTheme.displayMedium?.money.copyWith(
+                color: tone,
               ),
-              Gap.h12,
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: AnimatedMoneyText(
-                  value: safe.perDay,
-                  style: theme.textTheme.displayLarge?.money.copyWith(
-                    color: tone,
-                    fontWeight: FontWeight.w600,
-                  ),
+            ),
+          ),
+          Gap.h8,
+          Text(
+            safe.daysRemaining <= 0
+                ? 'The month is over'
+                : '${summary.remaining.formatCompact()} left · '
+                      '${safe.daysRemaining} days to go',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: Colors.white.withValues(alpha: 0.65),
+            ),
+          ),
+          Gap.h16,
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 6,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: spentRatio),
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+                builder: (context, animated, _) => LinearProgressIndicator(
+                  value: animated,
+                  backgroundColor: Colors.white.withValues(alpha: 0.12),
+                  valueColor: AlwaysStoppedAnimation(tone),
                 ),
               ),
-              Gap.h8,
-              Text(
-                safe.daysRemaining <= 0
-                    ? 'The month is over'
-                    : '${summary.spent.formatCompact()} spent • '
-                          '${summary.remaining.formatCompact()} remaining',
-                style: theme.textTheme.bodySmall,
-              ),
-              Gap.h16,
-              FlatBar(value: spentRatio, color: tone),
-              Gap.h8,
-              Text(
-                '${(spentRatio * 100).round()}% of monthly budget',
-                style: theme.textTheme.labelSmall,
-              ),
-            ],
+            ),
+          ),
+          Gap.h8,
+          Text(
+            '${(spentRatio * 100).round()}% of monthly budget',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
           ),
         ],
       ),
@@ -353,43 +358,147 @@ class _SafeToSpendFigure extends ConsumerWidget {
   }
 }
 
-/// A light, fixed illustration — a wallet with a scatter of small marks
-/// around it. Decoration only: nothing here is a value, a percentage, or a
-/// chart, and it never changes shape based on data. It exists purely to keep
-/// the hero card from reading as an empty rectangle of text.
-class _HeroDecoration extends StatelessWidget {
-  const _HeroDecoration({required this.tone});
+/// The prototype's invest-progress teaser: shown while the six-month streak
+/// is still building, dropped once it's unlocked (the app shell then shows
+/// the celebration exactly once, on the transition).
+class _InvestTeaserCard extends StatelessWidget {
+  const _InvestTeaserCard({required this.unlock});
 
-  final Color tone;
+  final UnlockClaim unlock;
 
   @override
   Widget build(BuildContext context) {
-    final faint = tone.withValues(alpha: 0.18);
-    final faintest = tone.withValues(alpha: 0.1);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final monthsToInvest = (6 - unlock.streakMonths).clamp(0, 6);
+    final progress = (unlock.streakMonths / 6).clamp(0.0, 1.0);
 
-    return SizedBox(
-      width: 96,
-      height: 84,
-      child: Stack(
+    return Container(
+      padding: const EdgeInsets.all(Gap.lg),
+      decoration: AppTheme.card(scheme),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Positioned(
-            right: 10,
-            top: 18,
-            child: Icon(Icons.account_balance_wallet_outlined, size: 40, color: faint),
+          Text(
+            'Investing unlocks in $monthsToInvest month'
+            '${monthsToInvest == 1 ? "" : "s"}',
+            style: theme.textTheme.titleSmall,
           ),
-          Positioned(right: 0, top: 0, child: _dot(faintest, 10)),
-          Positioned(right: 34, top: 6, child: _dot(faint, 5)),
-          Positioned(right: 4, top: 54, child: _dot(faint, 7)),
+          Gap.h8,
+          FlatBar(value: progress, color: scheme.primary, height: 8),
+          Gap.h8,
+          Text(
+            '${unlock.streakMonths} of 6 months saved consistently',
+            style: theme.textTheme.labelSmall,
+          ),
         ],
       ),
     );
   }
+}
 
-  Widget _dot(Color color, double size) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-  );
+/// A compact, tappable row into the merged health-and-insights screen.
+class _HealthScoreRow extends StatelessWidget {
+  const _HealthScoreRow({
+    required this.summary,
+    required this.categories,
+    required this.unlock,
+  });
+
+  final BudgetSummary summary;
+  final List<CategorySpend> categories;
+  final UnlockClaim? unlock;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final score = computeHealthScore(
+      HealthScoreInput(
+        savingsTarget: summary.savingsTarget,
+        savingsActual: summary.savedActual,
+        totalAllocated: summary.allocated,
+        totalSpent: summary.spent,
+        categoriesExceeded: categories
+            .where((c) => c.progress.isExceeded)
+            .length,
+        categoryCount: categories.length,
+        daysWithExpenses: summary.daysWithExpenses,
+        daysElapsed: summary.period.daysElapsed(),
+        investingUnlocked: unlock?.isUnlocked ?? false,
+        investmentTarget: summary.investmentTarget ?? const Money.zero(),
+        investmentActual: summary.investedActual,
+      ),
+    );
+
+    return PressableScale.onTap(
+      onTap: () {
+        AppHaptics.tap();
+        context.push(Routes.insights);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(Gap.lg),
+        decoration: AppTheme.card(scheme),
+        child: Row(
+          children: [
+            ScoreRing(score: score.score, label: '', size: 56, stroke: 6),
+            Gap.w16,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Financial Health Score',
+                    style: theme.textTheme.titleSmall,
+                  ),
+                  Text(
+                    '${score.band} · tap for details',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RecentExpenseRow extends ConsumerWidget {
+  const _RecentExpenseRow({required this.expense, required this.budgetId});
+
+  final Expense expense;
+  final String budgetId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      title: Text(
+        expense.note?.isNotEmpty ?? false
+            ? expense.note!
+            : expense.categoryName ?? 'Expense',
+      ),
+      subtitle: Text(
+        [
+          DateFormat('d MMM').format(expense.spentOn),
+          expense.categoryName ?? 'Uncategorised',
+        ].join(' · '),
+      ),
+      trailing: Text(
+        '−${expense.amount.formatCompact()}',
+        style: theme.textTheme.titleSmall?.money,
+      ),
+      onTap: () => showExpenseSheet(context, ref, budgetId, editing: expense),
+    );
+  }
 }
 
 class _CategorySkeleton extends StatelessWidget {
@@ -398,19 +507,17 @@ class _CategorySkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return ListSection(
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: Gap.md,
+      mainAxisSpacing: Gap.md,
+      childAspectRatio: 1.5,
       children: [
         for (var i = 0; i < 4; i++)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: Gap.lg),
-            child: Container(
-              height: 14,
-              width: 160,
-              decoration: BoxDecoration(
-                color: scheme.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
+          Container(
+            decoration: AppTheme.card(scheme, radius: 16),
           ),
       ],
     );

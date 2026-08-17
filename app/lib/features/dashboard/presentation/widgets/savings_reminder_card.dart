@@ -2,6 +2,7 @@ import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,7 @@ class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
             amount: widget.summary.savingsOutstanding,
           );
       ref.refreshBudgetData();
+      AppHaptics.success();
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -64,11 +66,7 @@ class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
 
     return Container(
       padding: const EdgeInsets.all(Gap.lg),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
+      decoration: AppTheme.card(scheme),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -105,27 +103,34 @@ class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
             ),
           ),
           if (!isDone)
-            OutlinedButton(
-              onPressed: _busy ? null : _confirm,
-              style: OutlinedButton.styleFrom(
-                shape: const StadiumBorder(),
-                minimumSize: const Size(72, 38),
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+            PressableScale.onTap(
+              onTap: _busy ? null : _confirm,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1B2340),
+                  borderRadius: BorderRadius.all(Radius.circular(100)),
+                ),
+                child: _busy
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        "I've moved it",
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
               ),
-              child: _busy
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('Done'),
-                        SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_rounded, size: 15),
-                      ],
-                    ),
             ),
         ],
       ),
