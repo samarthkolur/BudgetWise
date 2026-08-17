@@ -13,7 +13,12 @@ const _food = CategoryTemplate(
   defaultPercent: 60,
   isEssential: true,
 );
-const _misc = CategoryTemplate(key: 'misc', name: 'Misc', icon: '✨', defaultPercent: 40);
+const _misc = CategoryTemplate(
+  key: 'misc',
+  name: 'Misc',
+  icon: '✨',
+  defaultPercent: 40,
+);
 
 void main() {
   setUpAll(() {
@@ -63,22 +68,25 @@ void main() {
     );
   });
 
-  test('currentBudget finds the budget for the current calendar month', () async {
-    final now = Period.current();
-    final budget = await budgets.createMonth(
-      period: now,
-      income: const Money(500000),
-      savingsMode: SavingsMode.fixed,
-      savingsTarget: const Money(100000),
-      allocations: allocateByPercent(
-        total: const Money(400000),
-        percents: {_food: 100},
-      ),
-    );
+  test(
+    'currentBudget finds the budget for the current calendar month',
+    () async {
+      final now = Period.current();
+      final budget = await budgets.createMonth(
+        period: now,
+        income: const Money(500000),
+        savingsMode: SavingsMode.fixed,
+        savingsTarget: const Money(100000),
+        allocations: allocateByPercent(
+          total: const Money(400000),
+          percents: {_food: 100},
+        ),
+      );
 
-    final current = await budgets.currentBudget();
-    expect(current?.id, budget.id);
-  });
+      final current = await budgets.currentBudget();
+      expect(current?.id, budget.id);
+    },
+  );
 
   test('currentBudget is null when no budget exists for this month', () async {
     expect(await budgets.currentBudget(), isNull);
@@ -136,29 +144,32 @@ void main() {
     expect(summary.isSavingsConfirmed, isTrue);
   });
 
-  test('categoriesFor reports spent and expense count per category, not pooled', () async {
-    final budget = await createTestMonth();
-    final categories = await budgets.categoriesFor(budget.id);
-    final food = categories.firstWhere((c) => c.key == 'food');
+  test(
+    'categoriesFor reports spent and expense count per category, not pooled',
+    () async {
+      final budget = await createTestMonth();
+      final categories = await budgets.categoriesFor(budget.id);
+      final food = categories.firstWhere((c) => c.key == 'food');
 
-    final expenses = LocalExpenseRepository(dbFuture);
-    await expenses.add(
-      budgetId: budget.id,
-      categoryId: food.id,
-      amount: const Money(1000),
-      spentOn: DateTime(2026, 8),
-      paymentMethod: PaymentMethod.upi,
-    );
+      final expenses = LocalExpenseRepository(dbFuture);
+      await expenses.add(
+        budgetId: budget.id,
+        categoryId: food.id,
+        amount: const Money(1000),
+        spentOn: DateTime(2026, 8),
+        paymentMethod: PaymentMethod.upi,
+      );
 
-    final updated = await budgets.categoriesFor(budget.id);
-    final updatedFood = updated.firstWhere((c) => c.key == 'food');
-    final updatedMisc = updated.firstWhere((c) => c.key == 'misc');
+      final updated = await budgets.categoriesFor(budget.id);
+      final updatedFood = updated.firstWhere((c) => c.key == 'food');
+      final updatedMisc = updated.firstWhere((c) => c.key == 'misc');
 
-    expect(updatedFood.spent, const Money(1000));
-    expect(updatedFood.expenseCount, 1);
-    expect(updatedMisc.spent, const Money.zero());
-    expect(updatedMisc.expenseCount, 0);
-  });
+      expect(updatedFood.spent, const Money(1000));
+      expect(updatedFood.expenseCount, 1);
+      expect(updatedMisc.spent, const Money.zero());
+      expect(updatedMisc.expenseCount, 0);
+    },
+  );
 
   test('updateCategoryAllocation changes only the targeted category', () async {
     final budget = await createTestMonth();

@@ -175,8 +175,7 @@ class LocalBudgetRepository implements BudgetRepository {
   final Future<LocalDatabase> _dbFuture;
 
   @override
-  Future<MonthlyBudget?> currentBudget() =>
-      _budgetForPeriod(Period.current());
+  Future<MonthlyBudget?> currentBudget() => _budgetForPeriod(Period.current());
 
   @override
   Future<BudgetSummary?> summaryFor(Period period) async {
@@ -237,7 +236,8 @@ class LocalBudgetRepository implements BudgetRepository {
       [budgetId],
     );
     final spentByCategory = {
-      for (final r in spentRows) r['category_id']! as String: r['total']! as int,
+      for (final r in spentRows)
+        r['category_id']! as String: r['total']! as int,
     };
     final countByCategory = {
       for (final r in spentRows) r['category_id']! as String: r['cnt']! as int,

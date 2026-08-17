@@ -54,41 +54,47 @@ void main() {
     expect(reread.hasCompletedOnboarding, isTrue);
   });
 
-  test('investingStatus is always locked without a server to verify it', () async {
-    final status = await profiles.investingStatus();
+  test(
+    'investingStatus is always locked without a server to verify it',
+    () async {
+      final status = await profiles.investingStatus();
 
-    expect(status.isUnlocked, isFalse);
-    expect(status.streakMonths, 0);
-  });
+      expect(status.isUnlocked, isFalse);
+      expect(status.streakMonths, 0);
+    },
+  );
 
-  test('deleteAccount clears the profile and every other local table', () async {
-    final db = await dbFuture;
-    final budgets = LocalBudgetRepository(dbFuture);
-    const template = CategoryTemplate(
-      key: 'food',
-      name: 'Food',
-      icon: '🍽️',
-      defaultPercent: 100,
-      isEssential: true,
-    );
+  test(
+    'deleteAccount clears the profile and every other local table',
+    () async {
+      final db = await dbFuture;
+      final budgets = LocalBudgetRepository(dbFuture);
+      const template = CategoryTemplate(
+        key: 'food',
+        name: 'Food',
+        icon: '🍽️',
+        defaultPercent: 100,
+        isEssential: true,
+      );
 
-    await profiles.current();
-    await budgets.createMonth(
-      period: Period(2026, 8),
-      income: const Money(1000000),
-      savingsMode: SavingsMode.percent,
-      savingsTarget: const Money.zero(),
-      savingsPercent: 0,
-      allocations: allocateByPercent(
-        total: const Money(1000000),
-        percents: {template: 100},
-      ),
-    );
+      await profiles.current();
+      await budgets.createMonth(
+        period: Period(2026, 8),
+        income: const Money(1000000),
+        savingsMode: SavingsMode.percent,
+        savingsTarget: const Money.zero(),
+        savingsPercent: 0,
+        allocations: allocateByPercent(
+          total: const Money(1000000),
+          percents: {template: 100},
+        ),
+      );
 
-    await profiles.deleteAccount();
+      await profiles.deleteAccount();
 
-    expect(await db.db.query('local_profile'), isEmpty);
-    expect(await db.db.query('budgets'), isEmpty);
-    expect(await db.db.query('categories'), isEmpty);
-  });
+      expect(await db.db.query('local_profile'), isEmpty);
+      expect(await db.db.query('budgets'), isEmpty);
+      expect(await db.db.query('categories'), isEmpty);
+    },
+  );
 }

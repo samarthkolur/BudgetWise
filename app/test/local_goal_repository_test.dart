@@ -24,7 +24,10 @@ void main() {
   tearDown(() async => (await dbFuture).db.close());
 
   test('create starts a goal at zero saved and active', () async {
-    final goal = await goals.create(title: 'Laptop', target: const Money(5000000));
+    final goal = await goals.create(
+      title: 'Laptop',
+      target: const Money(5000000),
+    );
 
     expect(goal.saved, const Money.zero());
     expect(goal.status, 'active');
@@ -36,7 +39,10 @@ void main() {
   });
 
   test('contribute accumulates rather than overwriting', () async {
-    final goal = await goals.create(title: 'Laptop', target: const Money(5000000));
+    final goal = await goals.create(
+      title: 'Laptop',
+      target: const Money(5000000),
+    );
 
     await goals.contribute(goalId: goal.id, amount: const Money(1000000));
     await goals.contribute(goalId: goal.id, amount: const Money(500000));
@@ -46,21 +52,27 @@ void main() {
     expect(saved.isAchieved, isFalse);
   });
 
-  test('contribute marks the goal achieved once saved reaches the target', () async {
-    final goal = await goals.create(
-      title: 'Emergency fund',
-      target: const Money(1000000),
-    );
+  test(
+    'contribute marks the goal achieved once saved reaches the target',
+    () async {
+      final goal = await goals.create(
+        title: 'Emergency fund',
+        target: const Money(1000000),
+      );
 
-    await goals.contribute(goalId: goal.id, amount: const Money(1000000));
+      await goals.contribute(goalId: goal.id, amount: const Money(1000000));
 
-    final achieved = (await goals.all()).single;
-    expect(achieved.status, 'achieved');
-    expect(achieved.isAchieved, isTrue);
-  });
+      final achieved = (await goals.all()).single;
+      expect(achieved.status, 'achieved');
+      expect(achieved.isAchieved, isTrue);
+    },
+  );
 
   test('delete removes the goal', () async {
-    final goal = await goals.create(title: 'Trip', target: const Money(2000000));
+    final goal = await goals.create(
+      title: 'Trip',
+      target: const Money(2000000),
+    );
 
     await goals.delete(goal.id);
 

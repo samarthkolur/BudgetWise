@@ -54,13 +54,15 @@ void main() {
   });
 
   test('setCategoryAmount is a no-op while spendable is zero', () {
-    final before =
-        container.read(onboardingControllerProvider).categoryPercents['food'];
+    final before = container
+        .read(onboardingControllerProvider)
+        .categoryPercents['food'];
 
     controller().setCategoryAmount('food', const Money(1000));
 
-    final after =
-        container.read(onboardingControllerProvider).categoryPercents['food'];
+    final after = container
+        .read(onboardingControllerProvider)
+        .categoryPercents['food'];
     expect(after, before);
   });
 
@@ -70,20 +72,24 @@ void main() {
     controller().resetToDefaults();
 
     final state = container.read(onboardingControllerProvider);
-    final defaultFood =
-        kDefaultCategories.firstWhere((t) => t.key == 'food').defaultPercent;
+    final defaultFood = kDefaultCategories
+        .firstWhere((t) => t.key == 'food')
+        .defaultPercent;
     expect(state.categoryPercents['food'], defaultFood);
   });
 
-  test('setDisplayName is what canSubmit requires along with a balanced, positive plan', () {
-    controller()
-      ..setIncome(const Money(1000000))
-      ..setSavingsPercent(0);
+  test(
+    'setDisplayName is what canSubmit requires along with a balanced, positive plan',
+    () {
+      controller()
+        ..setIncome(const Money(1000000))
+        ..setSavingsPercent(0);
 
-    expect(container.read(onboardingControllerProvider).canSubmit, isFalse);
+      expect(container.read(onboardingControllerProvider).canSubmit, isFalse);
 
-    controller().setDisplayName('Asha');
+      controller().setDisplayName('Asha');
 
-    expect(container.read(onboardingControllerProvider).canSubmit, isTrue);
-  });
+      expect(container.read(onboardingControllerProvider).canSubmit, isTrue);
+    },
+  );
 }
