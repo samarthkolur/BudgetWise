@@ -8,5 +8,6 @@ abstract final class Routes {
   static const ledger = '/ledger';
   static const goals = '/goals';
   static const insights = '/insights';
+  static const alerts = '/alerts';
   static const settings = '/settings';
 }

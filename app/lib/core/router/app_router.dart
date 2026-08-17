@@ -1,5 +1,6 @@
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/router/routes.dart';
+import 'package:budgetwise/features/alerts/presentation/alerts_screen.dart';
 import 'package:budgetwise/features/auth/presentation/sign_in_screen.dart';
 import 'package:budgetwise/features/dashboard/presentation/dashboard_screen.dart';
 import 'package:budgetwise/features/goals/presentation/goals_screen.dart';
@@ -65,6 +66,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: Routes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
       ),
+
+      // Insights and Settings are real, full screens but not tabs — reached
+      // by pushing from Home (the health-score row / "View all" link, and
+      // the avatar, respectively). Registered outside the ShellRoute so they
+      // get a normal push transition and system back button instead of
+      // rendering inside the persistent bottom-nav frame.
+      GoRoute(
+        path: Routes.insights,
+        builder: (context, state) => const InsightsScreen(),
+      ),
+      GoRoute(
+        path: Routes.settings,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+
       ShellRoute(
         navigatorKey: _shellKey,
         builder: (context, state, child) => AppShell(child: child),
@@ -85,14 +101,9 @@ final routerProvider = Provider<GoRouter>((ref) {
                 const NoTransitionPage(child: GoalsScreen()),
           ),
           GoRoute(
-            path: Routes.insights,
+            path: Routes.alerts,
             pageBuilder: (context, state) =>
-                const NoTransitionPage(child: InsightsScreen()),
-          ),
-          GoRoute(
-            path: Routes.settings,
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: SettingsScreen()),
+                const NoTransitionPage(child: AlertsScreen()),
           ),
         ],
       ),
