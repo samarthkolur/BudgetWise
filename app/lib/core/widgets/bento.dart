@@ -1,183 +1,8 @@
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
+import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
-
-/// A bento tile.
-///
-/// One fact per tile. The layout's job is to make the important tile bigger,
-/// not to make every tile shout — so a tile has exactly one number, one label,
-/// and at most one supporting line.
-///
-/// [tone] tints the whole tile at 12% alpha and is reserved for state that
-/// matters (over budget, savings pending). A grid where every tile is tinted
-/// has no hierarchy, so the default is untinted.
-class BentoTile extends StatelessWidget {
-  const BentoTile({
-    required this.child,
-    this.onTap,
-    this.tone,
-    this.padding = const EdgeInsets.all(Gap.xl),
-    this.height,
-    super.key,
-  });
-
-  final Widget child;
-  final VoidCallback? onTap;
-  final Color? tone;
-  final EdgeInsetsGeometry padding;
-  final double? height;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final background = tone == null
-        ? scheme.surfaceContainerLow
-        : Color.alphaBlend(
-            tone!.withValues(alpha: 0.10),
-            scheme.surfaceContainerLow,
-          );
-
-    return Material(
-      color: background,
-      borderRadius: BorderRadius.circular(24),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Container(
-          height: height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: tone?.withValues(alpha: 0.22) ?? scheme.outlineVariant,
-            ),
-          ),
-          padding: padding,
-          child: child,
-        ),
-      ),
-    );
-  }
-}
-
-/// A tile showing one figure: caption, value, optional footnote.
-///
-/// The value uses tabular figures so a column of tiles does not jitter as the
-/// numbers change.
-class BentoStat extends StatelessWidget {
-  const BentoStat({
-    required this.label,
-    required this.value,
-    this.footnote,
-    this.icon,
-    this.tone,
-    this.onTap,
-    this.emphasise = false,
-    super.key,
-  });
-
-  final String label;
-  final String value;
-  final String? footnote;
-  final IconData? icon;
-  final Color? tone;
-  final VoidCallback? onTap;
-
-  /// Promotes the value to display size. At most one tile per grid should.
-  final bool emphasise;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return BentoTile(
-      onTap: onTap,
-      tone: tone,
-      padding: const EdgeInsets.all(Gap.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 15, color: tone ?? scheme.onSurfaceVariant),
-                Gap.w4,
-              ],
-              Expanded(
-                child: Text(
-                  label,
-                  style: theme.textTheme.labelMedium,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          Gap.h8,
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  value,
-                  style:
-                      (emphasise
-                              ? theme.textTheme.displaySmall
-                              : theme.textTheme.titleLarge)
-                          ?.money
-                          .copyWith(
-                            color: tone ?? scheme.onSurface,
-                            fontWeight: emphasise
-                                ? FontWeight.w600
-                                : FontWeight.w600,
-                          ),
-                ),
-              ),
-              if (footnote != null) ...[
-                Gap.h4,
-                Text(
-                  footnote!,
-                  style: theme.textTheme.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// A row of equal-width tiles.
-///
-/// Uses IntrinsicHeight so tiles in a row share the tallest one's height —
-/// bento reads as a grid only when the tiles actually line up.
-class BentoRow extends StatelessWidget {
-  const BentoRow({required this.children, this.spacing = Gap.md, super.key});
-
-  final List<Widget> children;
-  final double spacing;
-
-  @override
-  Widget build(BuildContext context) {
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) SizedBox(width: spacing),
-            Expanded(child: children[i]),
-          ],
-        ],
-      ),
-    );
-  }
-}
 
 /// A section heading with an optional trailing action.
 class SectionHeader extends StatelessWidget {
@@ -219,7 +44,50 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
+/// A monochrome icon on a tinted circular background.
+///
+/// The one "icon as decoration" the design system allows — a single glyph in
+/// a single tone, never a multi-colour emoji. Used for category, stat, and
+/// insight markers so the same visual language covers all three instead of
+/// each screen inventing its own treatment.
+class IconBadge extends StatelessWidget {
+  const IconBadge({
+    required this.icon,
+    this.tone,
+    this.size = 40,
+    this.iconSize = 19,
+    super.key,
+  });
+
+  final IconData icon;
+  final Color? tone;
+  final double size;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = tone ?? scheme.onSurfaceVariant;
+
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHigh,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(icon, size: iconSize, color: color),
+    );
+  }
+}
+
 /// A thin progress bar with a flat track.
+///
+/// Animates toward a new [value] rather than jumping to it — adding an
+/// expense or moving a slider should read as the bar *responding*, not
+/// resetting. `TweenAnimationBuilder` re-tweens from wherever it last
+/// stopped, so this needs no state of its own.
 class FlatBar extends StatelessWidget {
   const FlatBar({
     required this.value,
@@ -235,15 +103,141 @@ class FlatBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final reduceMotion = AppMotion.reduceMotion(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(height),
       child: SizedBox(
         height: height,
-        child: LinearProgressIndicator(
-          value: value.clamp(0.0, 1.0),
-          backgroundColor: scheme.surfaceContainerHigh,
-          valueColor: AlwaysStoppedAnimation(color),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(end: value.clamp(0.0, 1.0)),
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 400),
+          curve: Curves.easeOutCubic,
+          builder: (context, animated, _) => LinearProgressIndicator(
+            value: animated,
+            backgroundColor: scheme.surfaceContainerHigh,
+            valueColor: AlwaysStoppedAnimation(color),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+/// A money figure that counts toward a new value instead of snapping to it —
+/// for the one or two figures on a screen worth making feel alive (the
+/// dashboard's hero number). Reused too widely, a counting digit stops
+/// reading as a response to something and starts reading as decoration,
+/// which is exactly what the rest of this design system avoids.
+class AnimatedMoneyText extends StatelessWidget {
+  const AnimatedMoneyText({required this.value, this.style, super.key});
+
+  final Money value;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = AppMotion.reduceMotion(context);
+    return TweenAnimationBuilder<int>(
+      tween: IntTween(end: value.minor),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 600),
+      curve: Curves.easeOutCubic,
+      builder: (context, animated, _) =>
+          Text(Money(animated).formatCompact(), style: style),
+    );
+  }
+}
+
+/// A small shadowed stat box: an uppercase label, then a value, then an
+/// optional footnote — the prototype's boxed income/saved/spent figures.
+/// Used wherever the design shows a grid of small cards (Home's stat row,
+/// Ledger's totals, onboarding's saving/spendable pair).
+class MiniStatCard extends StatelessWidget {
+  const MiniStatCard({
+    required this.label,
+    required this.value,
+    this.footnote,
+    this.tone,
+    this.padding = const EdgeInsets.all(Gap.md),
+    super.key,
+  });
+
+  final String label;
+  final String value;
+  final String? footnote;
+  final Color? tone;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Container(
+      padding: padding,
+      decoration: AppTheme.card(scheme, radius: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.labelMedium,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Gap.h4,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: theme.textTheme.titleMedium?.money.copyWith(
+                fontFamily: AppType.display,
+                fontWeight: FontWeight.w700,
+                color: tone ?? scheme.onSurface,
+              ),
+            ),
+          ),
+          if (footnote != null)
+            Text(
+              footnote!,
+              style: theme.textTheme.labelSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A grouped list: children separated by a hairline divider, no outer border
+/// or background. The flat replacement for a tile wrapping a column of rows.
+class ListSection extends StatelessWidget {
+  const ListSection({
+    required this.children,
+    this.padding = EdgeInsets.zero,
+    super.key,
+  });
+
+  final List<Widget> children;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: padding,
+      child: Column(
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            children[i],
+          ],
+        ],
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:budgetwise/core/api/api_client.dart';
 import 'package:budgetwise/core/api/token_store.dart';
+import 'package:budgetwise/core/db/local_database.dart';
 import 'package:budgetwise/features/auth/data/google_auth_service.dart';
 import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/auth/domain/profile.dart';
@@ -26,6 +27,14 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   ref.onDispose(client.close);
   return client;
 });
+
+/// The on-device database, opened once and reused. A plain [Provider] holding
+/// a [Future] rather than a [FutureProvider]: repository methods are already
+/// async, so they can just await this directly, and nothing has to rebuild a
+/// widget tree while the database file opens.
+final localDatabaseProvider = Provider<Future<LocalDatabase>>(
+  (ref) => LocalDatabase.open(),
+);
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -62,29 +71,40 @@ final isSignedInProvider = Provider<bool>(
   (ref) => ref.watch(sessionProvider).value ?? false,
 );
 
+/// Chooses the API repository when signed in, the on-device one otherwise.
+/// The one pattern behind all four repository providers below — screens and
+/// controllers only ever depend on the interface, so this is the entire seam
+/// between "server-backed" and "local-first".
 final profileRepositoryProvider = Provider<ProfileRepository>(
-  (ref) => ProfileRepository(ref.watch(apiClientProvider)),
+  (ref) => ref.watch(isSignedInProvider)
+      ? ApiProfileRepository(ref.watch(apiClientProvider))
+      : LocalProfileRepository(ref.watch(localDatabaseProvider)),
 );
 
-final profileProvider = FutureProvider<Profile?>((ref) async {
-  if (!ref.watch(isSignedInProvider)) return null;
-  return ref.watch(profileRepositoryProvider).current();
-});
+final profileProvider = FutureProvider<Profile?>(
+  (ref) => ref.watch(profileRepositoryProvider).current(),
+);
 
 // ---------------------------------------------------------------------------
 // Budget
 // ---------------------------------------------------------------------------
 
 final budgetRepositoryProvider = Provider<BudgetRepository>(
-  (ref) => BudgetRepository(ref.watch(apiClientProvider)),
+  (ref) => ref.watch(isSignedInProvider)
+      ? ApiBudgetRepository(ref.watch(apiClientProvider))
+      : LocalBudgetRepository(ref.watch(localDatabaseProvider)),
 );
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>(
-  (ref) => ExpenseRepository(ref.watch(apiClientProvider)),
+  (ref) => ref.watch(isSignedInProvider)
+      ? ApiExpenseRepository(ref.watch(apiClientProvider))
+      : LocalExpenseRepository(ref.watch(localDatabaseProvider)),
 );
 
 final goalRepositoryProvider = Provider<GoalRepository>(
-  (ref) => GoalRepository(ref.watch(apiClientProvider)),
+  (ref) => ref.watch(isSignedInProvider)
+      ? ApiGoalRepository(ref.watch(apiClientProvider))
+      : LocalGoalRepository(ref.watch(localDatabaseProvider)),
 );
 
 /// The month currently being viewed.
@@ -108,18 +128,13 @@ final selectedPeriodProvider = NotifierProvider<SelectedPeriod, Period>(
 ///
 /// Null is not an error — it is the signal the router uses to send the user
 /// into onboarding for a new month.
-final currentBudgetProvider = FutureProvider<MonthlyBudget?>((ref) async {
-  if (!ref.watch(isSignedInProvider)) return null;
-  return ref.watch(budgetRepositoryProvider).currentBudget();
-});
+final currentBudgetProvider = FutureProvider<MonthlyBudget?>(
+  (ref) => ref.watch(budgetRepositoryProvider).currentBudget(),
+);
 
-final budgetSummaryProvider = FutureProvider.family<BudgetSummary?, Period>((
-  ref,
-  period,
-) async {
-  if (!ref.watch(isSignedInProvider)) return null;
-  return ref.watch(budgetRepositoryProvider).summaryFor(period);
-});
+final budgetSummaryProvider = FutureProvider.family<BudgetSummary?, Period>(
+  (ref, period) => ref.watch(budgetRepositoryProvider).summaryFor(period),
+);
 
 final categoriesProvider = FutureProvider.family<List<CategorySpend>, String>((
   ref,
@@ -135,27 +150,23 @@ final expensesProvider = FutureProvider.family<List<Expense>, String>((
   return ref.watch(expenseRepositoryProvider).forBudget(budgetId);
 });
 
-final allBudgetsProvider = FutureProvider<List<MonthlyBudget>>((ref) async {
-  if (!ref.watch(isSignedInProvider)) return const [];
-  return ref.watch(budgetRepositoryProvider).allBudgets();
-});
+final allBudgetsProvider = FutureProvider<List<MonthlyBudget>>(
+  (ref) => ref.watch(budgetRepositoryProvider).allBudgets(),
+);
 
-final allSummariesProvider = FutureProvider<List<BudgetSummary>>((ref) async {
-  if (!ref.watch(isSignedInProvider)) return const [];
-  return ref.watch(budgetRepositoryProvider).allSummaries();
-});
+final allSummariesProvider = FutureProvider<List<BudgetSummary>>(
+  (ref) => ref.watch(budgetRepositoryProvider).allSummaries(),
+);
 
-final goalsProvider = FutureProvider<List<Goal>>((ref) async {
-  if (!ref.watch(isSignedInProvider)) return const [];
-  return ref.watch(goalRepositoryProvider).all();
-});
+final goalsProvider = FutureProvider<List<Goal>>(
+  (ref) => ref.watch(goalRepositoryProvider).all(),
+);
 
-final investingStatusProvider = FutureProvider<UnlockClaim>((ref) async {
-  if (!ref.watch(isSignedInProvider)) {
-    return const UnlockClaim(isUnlocked: false);
-  }
-  return ref.watch(profileRepositoryProvider).investingStatus();
-});
+/// Locked whenever there is no local database. Investing is a
+/// server-verified achievement — see [LocalProfileRepository.investingStatus].
+final investingStatusProvider = FutureProvider<UnlockClaim>(
+  (ref) => ref.watch(profileRepositoryProvider).investingStatus(),
+);
 
 /// Everything a write could have changed.
 ///

@@ -1,5 +1,8 @@
 import 'package:budgetwise/core/providers.dart';
+import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -34,6 +37,7 @@ class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
             amount: widget.summary.savingsOutstanding,
           );
       ref.refreshBudgetData();
+      AppHaptics.success();
       if (mounted) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
@@ -51,67 +55,84 @@ class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final summary = widget.summary;
 
     if (summary.savingsTarget.isZero) return const SizedBox.shrink();
 
     final isDone =
         summary.isSavingsConfirmed || summary.savingsOutstanding.isZero;
+    final tone = isDone ? scheme.healthy : scheme.warning;
 
-    return Card(
-      color: isDone
-          ? theme.colorScheme.secondaryContainer
-          : theme.colorScheme.tertiaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            Text(isDone ? '✅' : '🔔', style: const TextStyle(fontSize: 22)),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+    return Container(
+      padding: const EdgeInsets.all(Gap.lg),
+      decoration: AppTheme.card(scheme),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IconBadge(
+            icon: isDone
+                ? Icons.check_circle_outline_rounded
+                : Icons.account_balance_outlined,
+            tone: tone,
+          ),
+          Gap.w12,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isDone ? 'Savings moved' : 'Savings',
+                  style: theme.textTheme.titleSmall,
+                ),
+                Gap.h4,
+                Text(
+                  isDone
+                      ? '${summary.savedActual.formatCompact()} set aside this month.'
+                      : '${summary.savingsOutstanding.formatCompact()} to transfer.',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                if (!isDone) ...[
+                  Gap.h4,
                   Text(
-                    isDone ? 'Savings moved' : 'Move your savings',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: isDone
-                          ? theme.colorScheme.onSecondaryContainer
-                          : theme.colorScheme.onTertiaryContainer,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    isDone
-                        ? '${summary.savedActual.formatCompact()} set aside this month.'
-                        : '${summary.savingsOutstanding.formatCompact()} still to transfer.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: isDone
-                          ? theme.colorScheme.onSecondaryContainer
-                          : theme.colorScheme.onTertiaryContainer,
-                    ),
+                    'Move your savings to stay on track.',
+                    style: theme.textTheme.bodySmall,
                   ),
                 ],
-              ),
+              ],
             ),
-            if (!isDone)
-              FilledButton(
-                onPressed: _busy ? null : _confirm,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(88, 40),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
+          ),
+          if (!isDone)
+            PressableScale.onTap(
+              onTap: _busy ? null : _confirm,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF1B2340),
+                  borderRadius: BorderRadius.all(Radius.circular(100)),
                 ),
                 child: _busy
                     ? const SizedBox(
                         height: 16,
                         width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
-                    : const Text('Done'),
+                    : Text(
+                        "I've moved it",
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

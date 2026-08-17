@@ -78,7 +78,7 @@ class Harness {
 
   static const audience = 'test-web-client.apps.googleusercontent.com';
 
-  static Future<Harness> start() async {
+  static Future<Harness> start({bool allowDevLogin = false}) async {
     final uri =
         Platform.environment['MONGO_TEST_URI'] ?? 'mongodb://localhost:27018';
     // One database per suite process, cleared between tests by [reset].
@@ -104,6 +104,7 @@ class Harness {
       port: 0,
       accessTokenTtl: const Duration(hours: 1),
       refreshTokenTtl: const Duration(days: 30),
+      allowDevLogin: allowDevLogin,
     );
 
     final api = BudgetWiseApi(

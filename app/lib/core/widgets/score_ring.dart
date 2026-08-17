@@ -2,14 +2,15 @@ import 'dart:math' as math;
 
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:flutter/material.dart';
 
 /// The financial health score as a ring.
 ///
-/// Gamification here is deliberately light: a ring and a word, no badges, no
-/// confetti, no levels. The PRD asks the score to motivate, and a finance app
-/// that celebrates too loudly starts to feel like it is congratulating you for
-/// spending — which is the opposite of the point.
+/// A ring and a word — the one exception to the light-gamification approach
+/// is the investing-unlock celebration (`CelebrationOverlay`), reserved for
+/// that single real milestone. The score itself stays quiet: no badges, no
+/// levels, nothing here competes with the number.
 ///
 /// The arc animates from zero on first build so the number feels earned rather
 /// than assigned.
@@ -41,9 +42,16 @@ class ScoreRing extends StatelessWidget {
     final scheme = theme.colorScheme;
     final color = _color(scheme);
 
+    final reduceMotion = AppMotion.reduceMotion(context);
+
     return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: score / 100),
-      duration: const Duration(milliseconds: 900),
+      tween: Tween(
+        begin: reduceMotion ? score / 100 : 0,
+        end: score / 100,
+      ),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
       builder: (context, progress, _) => SizedBox(
         width: size,
@@ -57,21 +65,32 @@ class ScoreRing extends StatelessWidget {
           ),
           child: Center(
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   '${(progress * 100).round()}',
                   style: theme.textTheme.displaySmall?.money.copyWith(
+                    // Scaled to the ring instead of a fixed 32px — at the
+                    // compact 56px size this app also uses (Home's
+                    // health-score row), a fixed display-size number
+                    // overflowed past the stroke and read as misaligned.
+                    fontSize: size * 0.24,
                     fontWeight: FontWeight.w700,
                     color: scheme.onSurface,
                     height: 1,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: theme.textTheme.labelSmall?.copyWith(color: color),
-                ),
+                if (label.isNotEmpty) ...[
+                  SizedBox(height: size * 0.015),
+                  Text(
+                    label,
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: color,
+                      fontSize: (size * 0.085).clamp(9.0, 11.0),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -125,45 +144,4 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(_RingPainter old) =>
       old.progress != progress || old.color != color;
-}
-
-/// The savings streak, as a row of months.
-///
-/// Six dots, one per month toward the investing unlock. Concrete and countable
-/// — "4 of 6" is a thing you can finish, where a percentage bar is not.
-class StreakDots extends StatelessWidget {
-  const StreakDots({
-    required this.completed,
-    this.total = 6,
-    this.size = 9,
-    super.key,
-  });
-
-  final int completed;
-  final int total;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < total; i++)
-          Padding(
-            padding: EdgeInsets.only(right: i == total - 1 ? 0 : 5),
-            child: Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: i < completed
-                    ? scheme.primary
-                    : scheme.surfaceContainerHighest,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
 }

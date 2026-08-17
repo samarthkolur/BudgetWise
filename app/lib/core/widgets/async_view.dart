@@ -50,11 +50,14 @@ class ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              failure is NetworkFailure ? '📡' : '⚠️',
-              style: const TextStyle(fontSize: 40),
+            Icon(
+              failure is NetworkFailure
+                  ? Icons.wifi_off_rounded
+                  : Icons.error_outline_rounded,
+              size: 32,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Text(
               failure.message,
               textAlign: TextAlign.center,
@@ -86,7 +89,7 @@ class EmptyView extends StatelessWidget {
     super.key,
   });
 
-  final String icon;
+  final IconData icon;
   final String title;
   final String? message;
   final Widget? action;
@@ -100,8 +103,8 @@ class EmptyView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(icon, style: const TextStyle(fontSize: 44)),
-            const SizedBox(height: 14),
+            Icon(icon, size: 34, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 16),
             Text(
               title,
               style: theme.textTheme.titleMedium,

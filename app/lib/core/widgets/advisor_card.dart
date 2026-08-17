@@ -1,4 +1,5 @@
 import 'package:budgetwise/core/theme/app_theme.dart';
+import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:budgetwise/features/insights/domain/insight_rules.dart';
 import 'package:flutter/material.dart';
 
@@ -41,56 +42,34 @@ class AdvisorCard extends StatelessWidget {
       InsightTone.info => Icons.auto_awesome_outlined,
     };
 
-    return Container(
-      padding: const EdgeInsets.all(Gap.lg),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: scheme.outlineVariant),
-      ),
-      child: Column(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Gap.md),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: tone.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, size: 17, color: tone),
-              ),
-              Gap.w12,
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(insight.title, style: theme.textTheme.titleSmall),
-                ),
-              ),
-            ],
-          ),
-          Gap.h8,
-          Padding(
-            padding: const EdgeInsets.only(left: 42),
-            child: Text(insight.body, style: theme.textTheme.bodyMedium),
-          ),
-          if (onAction != null && actionLabel != null) ...[
-            Gap.h12,
-            Padding(
-              padding: const EdgeInsets.only(left: 42),
-              child: OutlinedButton(
-                onPressed: onAction,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 38),
-                  padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
-                ),
-                child: Text(actionLabel!),
-              ),
+          IconBadge(icon: icon, tone: tone),
+          Gap.w12,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(insight.title, style: theme.textTheme.titleSmall),
+                Gap.h4,
+                Text(insight.body, style: theme.textTheme.bodyMedium),
+                if (onAction != null && actionLabel != null) ...[
+                  Gap.h8,
+                  OutlinedButton(
+                    onPressed: onAction,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 38),
+                      padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                    ),
+                    child: Text(actionLabel!),
+                  ),
+                ],
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
@@ -113,15 +92,7 @@ class AdvisorHeader extends StatelessWidget {
 
     return Row(
       children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: scheme.advisory.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: Icon(Icons.auto_awesome, size: 18, color: scheme.advisory),
-        ),
+        IconBadge(icon: Icons.auto_awesome, tone: scheme.advisory),
         Gap.w12,
         Expanded(
           child: Column(
