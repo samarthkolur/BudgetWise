@@ -1,17 +1,22 @@
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
-import 'package:budgetwise/core/widgets/advisor_card.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
-import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:budgetwise/core/widgets/score_ring.dart';
-import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
-import 'package:budgetwise/features/insights/domain/insight_rules.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Insights, the health score, and the investing gate.
+/// The health-score detail screen: the ring, larger, plus the breakdown that
+/// explains it.
+///
+/// Reached only by pushing from Home (the health-score row, or its own "tap
+/// for details" hint) — not a tab. What used to live here alongside the
+/// score — the rule-based advisor cards, the investing-lock progress — now
+/// live on Home (the invest-teaser card) and in Alerts (the same
+/// `generateInsights` output, presented as the actionable feed); showing
+/// them a third time here would just be the same facts twice. This screen's
+/// only job is answering "why is the score what it is."
 class InsightsScreen extends ConsumerWidget {
   const InsightsScreen({super.key});
 
@@ -21,7 +26,7 @@ class InsightsScreen extends ConsumerWidget {
     final summary = ref.watch(budgetSummaryProvider(period));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Insights')),
+      appBar: AppBar(title: const Text('Financial Health Score')),
       body: AsyncView(
         value: summary,
         onRetry: () => ref.invalidate(budgetSummaryProvider),
@@ -70,22 +75,9 @@ class _InsightsBody extends ConsumerWidget {
           ),
         );
 
-        final insights = generateInsights(summary: summary, categories: list);
-
         return ListView(
-          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.xxl),
-          children: [
-            _HealthScoreCard(score: score),
-            Gap.h28,
-            _InvestingCard(claim: unlock.value),
-            Gap.h28,
-            const AdvisorHeader(subtitle: 'Based on your budget rules'),
-            ListSection(
-              children: [
-                for (final insight in insights) AdvisorCard(insight: insight),
-              ],
-            ),
-          ],
+          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.xl, Gap.lg, Gap.xxl),
+          children: [_HealthScoreCard(score: score)],
         );
       },
     );
@@ -100,118 +92,63 @@ class _HealthScoreCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Center(
           child: ScoreRing(score: score.score, label: score.band),
-        ),
-        Gap.h16,
-        Center(
-          child: Text(
-            'Financial health this month',
-            style: theme.textTheme.bodySmall,
-          ),
         ),
         Gap.h28,
 
         // The breakdown, because a score with no explanation is a grade —
         // and the PRD asked for motivation, not grading.
-        for (final component in score.components)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Gap.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(component.label, style: theme.textTheme.bodySmall),
-                    Text(
-                      '${component.earned.round()}/${component.available.round()}',
-                      style: theme.textTheme.labelSmall,
-                    ),
-                  ],
-                ),
-                Gap.h4,
-                FlatBar(
-                  value: component.ratio,
-                  color: theme.colorScheme.primary,
-                  height: 4,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+          decoration: AppTheme.card(scheme),
+          child: Column(
+            children: [
+              for (var i = 0; i < score.components.length; i++) ...[
+                if (i > 0) const Divider(height: 1),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Gap.md),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: Gap.md, top: 2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: score.components[i].ratio >= 1
+                              ? scheme.healthy
+                              : scheme.warning,
+                        ),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              score.components[i].label,
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            Text(
+                              '${score.components[i].earned.round()}/'
+                              '${score.components[i].available.round()} points',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
-            ),
+            ],
           ),
-      ],
-    );
-  }
-}
-
-/// The investing gate, locked or unlocked.
-///
-/// While locked it shows progress toward the nearer of the two routes rather
-/// than just refusing — the PRD's point is that the lock is a stage in a
-/// journey, not a wall.
-class _InvestingCard extends StatelessWidget {
-  const _InvestingCard({required this.claim});
-
-  final UnlockClaim? claim;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final data = claim;
-    if (data == null) return const SizedBox.shrink();
-
-    final isUnlocked = data.isUnlocked;
-    final streak = data.streakMonths;
-    final monthsLeft = data.monthsRemaining;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              isUnlocked
-                  ? Icons.trending_up_rounded
-                  : Icons.lock_outline_rounded,
-              size: 18,
-              color: isUnlocked
-                  ? theme.colorScheme.healthy
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                isUnlocked ? 'Investing is unlocked' : 'Investing is locked',
-                style: theme.textTheme.titleSmall,
-              ),
-            ),
-          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          isUnlocked
-              ? 'You built the habit first. Investing features are available '
-                    'from here on.'
-              : 'Save consistently for six months, or build three months of '
-                    'essential expenses as an emergency fund.',
-          style: theme.textTheme.bodySmall,
-        ),
-        if (!isUnlocked) ...[
-          Gap.h16,
-          // Dots rather than a bar: "4 of 6" is something a person can
-          // finish, where a percentage is just a number moving.
-          StreakDots(completed: streak),
-          Gap.h8,
-          Text(
-            '$streak of 6 months saved'
-            '${monthsLeft > 0 ? " · $monthsLeft to go" : ""}',
-            style: theme.textTheme.labelSmall,
-          ),
-        ],
       ],
     );
   }
