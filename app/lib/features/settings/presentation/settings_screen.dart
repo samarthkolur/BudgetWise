@@ -3,6 +3,7 @@ import 'package:budgetwise/core/router/routes.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -36,7 +37,9 @@ class SettingsScreen extends ConsumerWidget {
                         : NetworkImage(data.avatarUrl!),
                     child: data.avatarUrl == null
                         ? Icon(
-                            isSignedIn ? Icons.person_outline : Icons.phone_iphone,
+                            isSignedIn
+                                ? Icons.person_outline
+                                : Icons.phone_iphone,
                             size: 24,
                           )
                         : null,
@@ -63,54 +66,70 @@ class SettingsScreen extends ConsumerWidget {
                 ],
               ),
               Gap.h28,
-              ListSection(
-                children: [
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.currency_rupee),
-                    title: const Text('Currency'),
-                    trailing: Text(
-                      data.currency,
-                      style: theme.textTheme.bodyLarge,
-                    ),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.lock_outline),
-                    title: const Text('Investing'),
-                    trailing: Text(
-                      data.isInvestingUnlocked ? 'Unlocked' : 'Locked',
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: data.isInvestingUnlocked
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                decoration: AppTheme.card(theme.colorScheme),
+                child: ListSection(
+                  children: [
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.currency_rupee),
+                      title: const Text('Currency'),
+                      trailing: Text(
+                        data.currency,
+                        style: theme.textTheme.bodyLarge,
                       ),
                     ),
-                  ),
-                ],
-              ),
-              Gap.h28,
-              if (isSignedIn)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.logout, color: theme.colorScheme.error),
-                  title: Text(
-                    'Sign out',
-                    style: TextStyle(color: theme.colorScheme.error),
-                  ),
-                  onTap: () => _signOut(context, ref),
-                )
-              else
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    Icons.sync_outlined,
-                    color: theme.colorScheme.primary,
-                  ),
-                  title: const Text('Sign in with Google'),
-                  subtitle: const Text('Optional — back up and sync later'),
-                  onTap: () => context.push(Routes.signIn),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.lock_outline),
+                      title: const Text('Investing'),
+                      trailing: Text(
+                        data.isInvestingUnlocked ? 'Unlocked' : 'Locked',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: data.isInvestingUnlocked
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              Gap.h16,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+                decoration: AppTheme.card(theme.colorScheme),
+                child: isSignedIn
+                    ? PressableScale(
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.logout,
+                            color: theme.colorScheme.error,
+                          ),
+                          title: Text(
+                            'Sign out',
+                            style: TextStyle(color: theme.colorScheme.error),
+                          ),
+                          onTap: () => _signOut(context, ref),
+                        ),
+                      )
+                    : PressableScale(
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(
+                            Icons.sync_outlined,
+                            color: theme.colorScheme.primary,
+                          ),
+                          title: const Text('Sign in with Google'),
+                          subtitle: const Text(
+                            'Optional — back up and sync later',
+                          ),
+                          onTap: () => context.push(Routes.signIn),
+                        ),
+                      ),
+              ),
               Gap.h28,
               Center(
                 child: Text(
