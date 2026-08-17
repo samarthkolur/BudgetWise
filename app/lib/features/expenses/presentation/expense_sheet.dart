@@ -1,6 +1,7 @@
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
@@ -118,6 +119,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
         );
       }
       ref.refreshBudgetData();
+      AppHaptics.success();
       if (mounted) Navigator.of(context).pop();
     } on Object catch (error) {
       if (mounted) showFailure(context, error);
@@ -146,129 +148,144 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              height: 4,
-              width: 40,
-              decoration: BoxDecoration(
-                color: theme.colorScheme.outlineVariant,
-                borderRadius: BorderRadius.circular(2),
+      // Scrollable, not just a fixed Column: with the keyboard open, the
+      // available height can end up smaller than the content's natural
+      // height (a category list that wraps to three rows, for instance),
+      // and a bare Column has nowhere to put the overflow.
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            _isEditing ? 'Edit expense' : 'Add expense',
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 22),
+            const SizedBox(height: 18),
+            Text(
+              _isEditing ? 'Edit expense' : 'Add expense',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 22),
 
-          TextField(
-            controller: _amount,
-            autofocus: !_isEditing,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp('[0-9.]')),
-            ],
-            style: theme.textTheme.displaySmall?.money.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-            decoration: InputDecoration(
-              prefixText: '₹ ',
-              hintText: '0',
-              hintStyle: theme.textTheme.displaySmall?.money.copyWith(
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              errorText: _amountError,
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              filled: false,
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          const SizedBox(height: 22),
-
-          Text('Category', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
-          AsyncView(
-            value: categories,
-            loading: const SizedBox(
-              height: 44,
-              child: Center(child: LinearProgressIndicator()),
-            ),
-            builder: (list) => Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                for (final category in list)
-                  ChoiceChip(
-                    label: Text(category.name),
-                    selected: _categoryId == category.id,
-                    onSelected: (_) =>
-                        setState(() => _categoryId = category.id),
+            Center(
+              child: TextField(
+                controller: _amount,
+                autofocus: !_isEditing,
+                textAlign: TextAlign.center,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp('[0-9.]')),
+                ],
+                style: theme.textTheme.displaySmall?.money,
+                decoration: InputDecoration(
+                  prefixText: '₹ ',
+                  hintText: '0',
+                  hintStyle: theme.textTheme.displaySmall?.money.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
                   ),
+                  errorText: _amountError,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+
+            Text('Category', style: theme.textTheme.labelLarge),
+            const SizedBox(height: 8),
+            AsyncView(
+              value: categories,
+              loading: const SizedBox(
+                height: 44,
+                child: Center(child: LinearProgressIndicator()),
+              ),
+              builder: (list) => Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final category in list)
+                    ChoiceChip(
+                      label: Text(category.name),
+                      labelStyle: _categoryId == category.id
+                          ? theme.textTheme.labelMedium?.copyWith(
+                              color: Colors.white,
+                            )
+                          : null,
+                      selected: _categoryId == category.id,
+                      onSelected: (_) =>
+                          setState(() => _categoryId = category.id),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_today, size: 18),
+                    label: Text(
+                      _isToday(_date) ? 'Today' : '${_date.day}/${_date.month}',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButtonFormField<PaymentMethod>(
+                    initialValue: _method,
+                    decoration: const InputDecoration(
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    items: [
+                      for (final method in PaymentMethod.values)
+                        DropdownMenuItem(
+                          value: method,
+                          child: Text(method.label),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _method = value ?? _method),
+                  ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(height: 18),
+            const SizedBox(height: 14),
 
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _pickDate,
-                  icon: const Icon(Icons.calendar_today, size: 18),
-                  label: Text(
-                    _isToday(_date) ? 'Today' : '${_date.day}/${_date.month}',
-                  ),
-                ),
+            TextField(
+              controller: _note,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(hintText: 'Note (optional)'),
+            ),
+            const SizedBox(height: 20),
+
+            PressableScale(
+              child: FilledButton(
+                onPressed: _busy || _categoryId == null ? null : _save,
+                child: _busy
+                    ? const SizedBox(
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2.5),
+                      )
+                    : Text(_isEditing ? 'Save changes' : 'Add expense'),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: DropdownButtonFormField<PaymentMethod>(
-                  initialValue: _method,
-                  decoration: const InputDecoration(
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                  ),
-                  items: [
-                    for (final method in PaymentMethod.values)
-                      DropdownMenuItem(
-                        value: method,
-                        child: Text(method.label),
-                      ),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _method = value ?? _method),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          TextField(
-            controller: _note,
-            textCapitalization: TextCapitalization.sentences,
-            decoration: const InputDecoration(hintText: 'Note (optional)'),
-          ),
-          const SizedBox(height: 20),
-
-          FilledButton(
-            onPressed: _busy || _categoryId == null ? null : _save,
-            child: _busy
-                ? const SizedBox(
-                    height: 22,
-                    width: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2.5),
-                  )
-                : Text(_isEditing ? 'Save changes' : 'Add expense'),
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
