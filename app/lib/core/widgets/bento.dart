@@ -1,5 +1,6 @@
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 
@@ -102,13 +103,16 @@ class FlatBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final reduceMotion = AppMotion.reduceMotion(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(height),
       child: SizedBox(
         height: height,
         child: TweenAnimationBuilder<double>(
           tween: Tween(end: value.clamp(0.0, 1.0)),
-          duration: const Duration(milliseconds: 400),
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
           builder: (context, animated, _) => LinearProgressIndicator(
             value: animated,
@@ -134,9 +138,12 @@ class AnimatedMoneyText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = AppMotion.reduceMotion(context);
     return TweenAnimationBuilder<int>(
       tween: IntTween(end: value.minor),
-      duration: const Duration(milliseconds: 600),
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 600),
       curve: Curves.easeOutCubic,
       builder: (context, animated, _) =>
           Text(Money(animated).formatCompact(), style: style),
@@ -144,141 +151,64 @@ class AnimatedMoneyText extends StatelessWidget {
   }
 }
 
-/// A label/value line — the basic unit of a ledger, a settings screen, or an
-/// onboarding summary.
-///
-/// No border, no fill. A column of these reads as a statement, not a grid of
-/// facts, which is the point: rows belong together because they are lined up,
-/// not because they share a box.
-class MoneyRow extends StatelessWidget {
-  const MoneyRow({
-    required this.label,
-    required this.value,
-    this.emphasise = false,
-    this.valueColor,
-    this.tabular = true,
-    this.padding = const EdgeInsets.symmetric(vertical: Gap.xs),
-    super.key,
-  });
-
-  final String label;
-  final String value;
-  final bool emphasise;
-  final Color? valueColor;
-  final bool tabular;
-  final EdgeInsetsGeometry padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final valueStyle = emphasise
-        ? theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)
-        : theme.textTheme.bodyLarge;
-
-    return Padding(
-      padding: padding,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: emphasise
-                ? theme.textTheme.titleSmall
-                : theme.textTheme.bodyMedium,
-          ),
-          Text(
-            value,
-            style: (tabular ? valueStyle?.money : valueStyle)?.copyWith(
-              color: valueColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One typographic figure: an icon badge, then value, then label. No border,
-/// no fill on the column itself — only the badge carries any tint, so a row
-/// of these still reads as a statement rather than a grid of tiles.
-class StatColumn extends StatelessWidget {
-  const StatColumn({
-    required this.icon,
+/// A small shadowed stat box: an uppercase label, then a value, then an
+/// optional footnote — the prototype's boxed income/saved/spent figures.
+/// Used wherever the design shows a grid of small cards (Home's stat row,
+/// Ledger's totals, onboarding's saving/spendable pair).
+class MiniStatCard extends StatelessWidget {
+  const MiniStatCard({
     required this.label,
     required this.value,
     this.footnote,
     this.tone,
+    this.padding = const EdgeInsets.all(Gap.md),
     super.key,
   });
 
-  final IconData icon;
   final String label;
   final String value;
   final String? footnote;
   final Color? tone;
+  final EdgeInsetsGeometry padding;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Column(
-      children: [
-        IconBadge(icon: icon, tone: tone),
-        Gap.h8,
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            style: theme.textTheme.titleLarge?.money.copyWith(
-              color: tone ?? scheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-        Gap.h4,
-        Text(
-          label,
-          style: theme.textTheme.labelMedium,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        if (footnote != null)
+    return Container(
+      padding: padding,
+      decoration: AppTheme.card(scheme, radius: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Text(
-            footnote!,
-            style: theme.textTheme.bodySmall,
+            label,
+            style: theme.textTheme.labelMedium,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-      ],
-    );
-  }
-}
-
-/// A row of [StatColumn]s separated by a hairline vertical divider instead of
-/// tile boundaries — the month-at-a-glance figures, lined up rather than
-/// boxed.
-class StatRow extends StatelessWidget {
-  const StatRow({required this.children, super.key});
-
-  final List<StatColumn> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < children.length; i++) ...[
-            if (i > 0)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
-                child: VerticalDivider(width: 1, color: scheme.outlineVariant),
+          Gap.h4,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: theme.textTheme.titleMedium?.money.copyWith(
+                fontFamily: AppType.display,
+                fontWeight: FontWeight.w700,
+                color: tone ?? scheme.onSurface,
               ),
-            Expanded(child: children[i]),
-          ],
+            ),
+          ),
+          if (footnote != null)
+            Text(
+              footnote!,
+              style: theme.textTheme.labelSmall,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
         ],
       ),
     );

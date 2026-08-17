@@ -51,22 +51,32 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Geist, bundled rather than fetched at runtime through google_fonts. A
-  # finance app that shows the wrong typeface until the network answers is worse
-  # than 360 KB of APK. Five weights are shipped because the type scale uses
-  # exactly five and no more — see core/theme/app_typography.dart.
+  # Space Grotesk + Work Sans, bundled rather than fetched at runtime through
+  # google_fonts, for the same reason Geist was: a finance app that shows the
+  # wrong typeface until the network answers is worse than a few hundred KB of
+  # APK. Space Grotesk carries numbers, headings and buttons; Work Sans carries
+  # body copy and captions — see core/theme/app_typography.dart. Static weight
+  # instances were extracted from Google Fonts' variable-font source with
+  # fonttools (`varLib.instancer`), since discrete static files are no longer
+  # published upstream.
   #
-  # SIL Open Font License 1.1 (Vercel). assets/fonts/OFL.txt ships with them.
+  # SIL Open Font License 1.1 (Google). assets/fonts/OFL.txt ships with them.
   fonts:
-    - family: Geist
+    - family: Space Grotesk
       fonts:
-        - asset: assets/fonts/Geist-Light.ttf
-          weight: 300
-        - asset: assets/fonts/Geist-Regular.ttf
-          weight: 400
-        - asset: assets/fonts/Geist-Medium.ttf
+        - asset: assets/fonts/SpaceGrotesk-Medium.ttf
           weight: 500
-        - asset: assets/fonts/Geist-SemiBold.ttf
+        - asset: assets/fonts/SpaceGrotesk-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/Geist-Bold.ttf
+        - asset: assets/fonts/SpaceGrotesk-Bold.ttf
+          weight: 700
+    - family: Work Sans
+      fonts:
+        - asset: assets/fonts/WorkSans-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/WorkSans-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/WorkSans-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/WorkSans-Bold.ttf
           weight: 700
