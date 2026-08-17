@@ -3,6 +3,7 @@ import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
@@ -18,13 +19,41 @@ class GoalsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final goals = ref.watch(goalsProvider);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Goals')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showGoalSheet(context, ref),
-        icon: const Icon(Icons.add),
-        label: const Text('Goal'),
+      appBar: AppBar(
+        title: const Text('Goals'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: Gap.lg),
+            child: PressableScale.onTap(
+              onTap: () {
+                AppHaptics.tap();
+                _showGoalSheet(context, ref);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.primary,
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: Text(
+                  '+ New',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    fontFamily: AppType.display,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: AsyncView(
         value: goals,
@@ -47,11 +76,12 @@ class GoalsScreen extends ConsumerWidget {
           final active = list.where((g) => g.status != 'abandoned').toList();
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, 96),
+            padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.xxl),
             children: [
-              ListSection(
-                children: [for (final goal in active) _GoalCard(goal: goal)],
-              ),
+              for (final goal in active) ...[
+                _GoalCard(goal: goal),
+                Gap.h12,
+              ],
             ],
           );
         },
@@ -70,8 +100,9 @@ class _GoalCard extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: Gap.lg),
+    return Container(
+      padding: const EdgeInsets.all(Gap.lg),
+      decoration: AppTheme.card(scheme),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -123,12 +154,14 @@ class _GoalCard extends ConsumerWidget {
             Gap.h12,
             Align(
               alignment: Alignment.centerRight,
-              child: OutlinedButton(
-                onPressed: () => _showContributeSheet(context, ref, goal),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 38),
+              child: PressableScale(
+                child: OutlinedButton(
+                  onPressed: () => _showContributeSheet(context, ref, goal),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 38),
+                  ),
+                  child: const Text('Add money'),
                 ),
-                child: const Text('Add money'),
               ),
             ),
           ],
@@ -177,32 +210,101 @@ class _GoalProjection extends StatelessWidget {
   }
 }
 
-Future<void> _showGoalSheet(BuildContext context, WidgetRef ref) async {
-  final titleController = TextEditingController();
-  final targetController = TextEditingController();
-  final monthlyController = TextEditingController();
-  DateTime? targetDate;
-
-  await showModalBottomSheet<void>(
+void _showGoalSheet(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (sheetContext) => StatefulBuilder(
-      builder: (context, setSheetState) => Padding(
-        padding: EdgeInsets.only(
-          left: 20,
-          right: 20,
-          top: 20,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-        ),
+    builder: (sheetContext) => const _NewGoalSheet(),
+  );
+}
+
+/// A real `ConsumerStatefulWidget` rather than a bare builder closure with
+/// controllers created outside it and disposed after the sheet's `Future`
+/// resolves — that resolves the moment the route *starts* closing, not once
+/// its exit animation finishes, so a still-animating `TextField` ends up
+/// depending on a controller that is already disposed. This is the same
+/// `_dependents.isEmpty` assertion the onboarding amount sheet
+/// (`onboarding_screen.dart`'s `_AmountSheet`) already documents and fixes
+/// the same way — this sheet just hadn't been moved onto that pattern yet.
+class _NewGoalSheet extends ConsumerStatefulWidget {
+  const _NewGoalSheet();
+
+  @override
+  ConsumerState<_NewGoalSheet> createState() => _NewGoalSheetState();
+}
+
+class _NewGoalSheetState extends ConsumerState<_NewGoalSheet> {
+  final _titleController = TextEditingController();
+  final _targetController = TextEditingController();
+  final _monthlyController = TextEditingController();
+  DateTime? _targetDate;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _targetController.dispose();
+    _monthlyController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(now.year, now.month + 6),
+      firstDate: now,
+      lastDate: DateTime(now.year + 20),
+    );
+    if (picked != null) setState(() => _targetDate = picked);
+  }
+
+  Future<void> _submit() async {
+    final target = Money.tryParse(_targetController.text);
+    if (_titleController.text.trim().isEmpty ||
+        target == null ||
+        !target.isPositive) {
+      return;
+    }
+    try {
+      await ref
+          .read(goalRepositoryProvider)
+          .create(
+            title: _titleController.text,
+            target: target,
+            targetDate: _targetDate,
+            monthlyContribution: Money.tryParse(_monthlyController.text),
+          );
+      ref.invalidate(goalsProvider);
+      AppHaptics.success();
+      if (mounted) Navigator.of(context).pop();
+    } on Object catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      // Scrollable so three text fields plus a date button don't overflow
+      // once the keyboard has eaten into the available height.
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('New goal', style: Theme.of(context).textTheme.titleLarge),
+            Text('New goal', style: theme.textTheme.titleLarge),
             const SizedBox(height: 16),
             TextField(
-              controller: titleController,
+              controller: _titleController,
               autofocus: true,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
@@ -211,7 +313,7 @@ Future<void> _showGoalSheet(BuildContext context, WidgetRef ref) async {
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: targetController,
+              controller: _targetController,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -225,7 +327,7 @@ Future<void> _showGoalSheet(BuildContext context, WidgetRef ref) async {
             ),
             const SizedBox(height: 12),
             TextField(
-              controller: monthlyController,
+              controller: _monthlyController,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -239,137 +341,122 @@ Future<void> _showGoalSheet(BuildContext context, WidgetRef ref) async {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
-              onPressed: () async {
-                final now = DateTime.now();
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime(now.year, now.month + 6),
-                  firstDate: now,
-                  lastDate: DateTime(now.year + 20),
-                );
-                if (picked != null) setSheetState(() => targetDate = picked);
-              },
+              onPressed: _pickDate,
               icon: const Icon(Icons.event, size: 18),
               label: Text(
-                targetDate == null
+                _targetDate == null
                     ? 'Target date (optional)'
-                    : DateFormat('d MMM yyyy').format(targetDate!),
+                    : DateFormat('d MMM yyyy').format(_targetDate!),
               ),
             ),
             const SizedBox(height: 20),
-            FilledButton(
-              onPressed: () async {
-                final target = Money.tryParse(targetController.text);
-                if (titleController.text.trim().isEmpty ||
-                    target == null ||
-                    !target.isPositive) {
-                  return;
-                }
-                try {
-                  await ref
-                      .read(goalRepositoryProvider)
-                      .create(
-                        title: titleController.text,
-                        target: target,
-                        targetDate: targetDate,
-                        monthlyContribution: Money.tryParse(
-                          monthlyController.text,
-                        ),
-                      );
-                  ref.invalidate(goalsProvider);
-                  if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                } on Object catch (error) {
-                  if (sheetContext.mounted) showFailure(sheetContext, error);
-                }
-              },
-              child: const Text('Create goal'),
-            ),
+            FilledButton(onPressed: _submit, child: const Text('Create goal')),
           ],
         ),
       ),
-    ),
-  );
-
-  titleController.dispose();
-  targetController.dispose();
-  monthlyController.dispose();
+    );
+  }
 }
 
-Future<void> _showContributeSheet(
-  BuildContext context,
-  WidgetRef ref,
-  Goal goal,
-) async {
-  final amountController = TextEditingController();
-
-  await showModalBottomSheet<void>(
+void _showContributeSheet(BuildContext context, WidgetRef ref, Goal goal) {
+  showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (sheetContext) => Padding(
+    builder: (sheetContext) => _ContributeSheet(goal: goal),
+  );
+}
+
+/// Same fix as [_NewGoalSheet]: a real `ConsumerStatefulWidget` so the amount
+/// controller is torn down exactly once, when this element actually
+/// unmounts — not the moment the sheet's route starts closing.
+class _ContributeSheet extends ConsumerStatefulWidget {
+  const _ContributeSheet({required this.goal});
+
+  final Goal goal;
+
+  @override
+  ConsumerState<_ContributeSheet> createState() => _ContributeSheetState();
+}
+
+class _ContributeSheetState extends ConsumerState<_ContributeSheet> {
+  final _amountController = TextEditingController();
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final amount = Money.tryParse(_amountController.text);
+    if (amount == null || !amount.isPositive) return;
+    try {
+      final budget = ref.read(currentBudgetProvider).value;
+      await ref
+          .read(goalRepositoryProvider)
+          .contribute(
+            goalId: widget.goal.id,
+            amount: amount,
+            budgetId: budget?.id,
+          );
+      ref.invalidate(goalsProvider);
+      AppHaptics.success();
+      if (mounted) Navigator.of(context).pop();
+    } on Object catch (error) {
+      if (mounted) showFailure(context, error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Padding(
       padding: EdgeInsets.only(
         left: 20,
         right: 20,
         top: 20,
-        bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Add to ${goal.title}',
-            style: Theme.of(sheetContext).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${goal.remaining.formatCompact()} still to go',
-            style: Theme.of(sheetContext).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: amountController,
-            autofocus: true,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: [
-              FilteringTextInputFormatter.allow(RegExp('[0-9.]')),
-            ],
-            style: Theme.of(sheetContext).textTheme.headlineMedium,
-            decoration: InputDecoration(
-              prefixText: '₹ ',
-              hintText: '0',
-              hintStyle: Theme.of(sheetContext).textTheme.headlineMedium
-                  ?.copyWith(
-                    color: Theme.of(sheetContext).colorScheme.onSurfaceVariant,
-                  ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Add to ${widget.goal.title}',
+              style: theme.textTheme.titleLarge,
             ),
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            onPressed: () async {
-              final amount = Money.tryParse(amountController.text);
-              if (amount == null || !amount.isPositive) return;
-              try {
-                final budget = ref.read(currentBudgetProvider).value;
-                await ref
-                    .read(goalRepositoryProvider)
-                    .contribute(
-                      goalId: goal.id,
-                      amount: amount,
-                      budgetId: budget?.id,
-                    );
-                ref.invalidate(goalsProvider);
-                if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-              } on Object catch (error) {
-                if (sheetContext.mounted) showFailure(sheetContext, error);
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
+            const SizedBox(height: 6),
+            Text(
+              '${widget.goal.remaining.formatCompact()} still to go',
+              style: theme.textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _amountController,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(RegExp('[0-9.]')),
+              ],
+              style: theme.textTheme.headlineMedium,
+              decoration: InputDecoration(
+                prefixText: '₹ ',
+                hintText: '0',
+                hintStyle: theme.textTheme.headlineMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton(onPressed: _submit, child: const Text('Add')),
+          ],
+        ),
       ),
-    ),
-  );
-
-  amountController.dispose();
+    );
+  }
 }
