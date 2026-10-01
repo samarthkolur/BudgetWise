@@ -1,0 +1,26 @@
+# Local MongoDB. Nothing else is needed to run BudgetWise end to end.
+#
+#   docker compose up -d
+#
+# No authentication is configured, and that is deliberate: the port is bound to
+# loopback only, so nothing off this machine can reach it. Adding a password
+# here would be security theatre — the credential would live in this file, in
+# git, next to the thing it protects.
+services:
+  mongo:
+    image: mongo:7
+    container_name: budgetwise_mongo
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    command: ["--wiredTigerCacheSizeGB", "0.5"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mongo_data:

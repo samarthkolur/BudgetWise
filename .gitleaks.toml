@@ -26,7 +26,10 @@ description = "MongoDB connection string with inline credentials"
 # Excludes angle-bracket placeholders (<user>:<password>@<cluster>), which is
 # how the shape is documented in .env.example — a rule that flags its own
 # documentation is a rule people learn to ignore.
-regex = '''mongodb(\+srv)?:\/\/[^:\/\s<>]+:[^@\/\s<>]+@[^\s'"<>]+'''
+# Non-capturing group: gitleaks reports the first capture group as "the
+# secret", so a capturing (\+srv) made the finding literally the string "+srv"
+# — which no allowlist could usefully match and which told a reader nothing.
+regex = '''mongodb(?:\+srv)?:\/\/[^:\/\s<>]+:[^@\/\s<>]+@[^\s'"<>]+'''
 keywords = ["mongodb://", "mongodb+srv://"]
 
 [[rules]]
@@ -80,6 +83,16 @@ paths = [
 ]
 
 regexes = [
+  # The fake Atlas URI in server/test/dev_login_test.dart. That suite has to
+  # contain a credential-SHAPED string to prove the dev-login guard rejects
+  # non-local databases — a test for "we refuse Atlas" cannot avoid naming
+  # something that looks like Atlas.
+  #
+  # Allowlisted by the exact fake value rather than by allowlisting the test
+  # directory: a genuine connection string pasted into a test would still be
+  # caught, which is the property that matters.
+  '''mongodb\+srv://user:pw@cluster0\.abc\.mongodb\.net''',
+
   # Placeholder values in the committed example config. Enumerated rather than
   # allowlisting example.json wholesale, so a real value pasted into it is still
   # caught.

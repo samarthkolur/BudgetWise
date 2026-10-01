@@ -20,7 +20,7 @@ TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
 # Scopes are the feature and layer names, so history stays greppable per module.
 # Adding one here is a deliberate act: it means a new area of the codebase
 # exists.
-SCOPES="money|time|budget|db|auth|onboarding|dashboard|expenses|ledger|goals|insights|investing|export|settings|core|router|theme|scaffold|deps|hooks|ci|docs"
+SCOPES="money|time|budget|db|auth|onboarding|dashboard|expenses|ledger|goals|insights|investing|export|settings|core|router|theme|scaffold|deps|hooks|ci|docs|domain|app"
 
 red() { printf '\033[31m✗ %s\033[0m\n' "$*"; }
 

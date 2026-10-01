@@ -1,6 +1,7 @@
 import 'package:budgetwise/core/env/env.dart';
 import 'package:budgetwise/core/router/app_router.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -25,8 +26,8 @@ class BudgetWiseApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'BudgetWise',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.theme(),
+      scrollBehavior: AppScrollBehavior(),
       routerConfig: ref.watch(routerProvider),
     );
   }
@@ -44,7 +45,7 @@ class _MisconfiguredApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: AppTheme.theme(),
       home: Scaffold(
         body: Center(
           child: Padding(

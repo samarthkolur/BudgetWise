@@ -84,6 +84,30 @@ class GoogleAuthService {
     }
   }
 
+  /// Signs in against the server's local dev endpoint, with no Google account.
+  ///
+  /// Only reachable when this build was compiled with `DEV_LOGIN=true` *and*
+  /// the server was started with `ALLOW_DEV_LOGIN=true` against a local
+  /// database. Two independent switches, either of which alone does nothing.
+  Future<void> signInLocally({String email = 'dev@budgetwise.local'}) async {
+    if (!Env.devLogin) {
+      throw const AuthFailure('Local sign-in is not enabled in this build.');
+    }
+    try {
+      final response =
+          await _api.postAnonymous('/v1/auth/dev/login', {'email': email})
+              as Map<String, dynamic>;
+      await _tokens.save(
+        accessToken: response['accessToken'] as String,
+        refreshToken: response['refreshToken'] as String,
+      );
+    } on AppFailure {
+      rethrow;
+    } on Object catch (error, stackTrace) {
+      throw mapError(error, stackTrace);
+    }
+  }
+
   /// Ends the session everywhere it exists.
   ///
   /// The refresh token is revoked server-side first, so it cannot be replayed;

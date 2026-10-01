@@ -1,3 +1,4 @@
+import 'package:budgetwise/core/env/env.dart';
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// no account-recovery path — the whole surface simply does not exist. That is
 /// the point of choosing a single federated provider, and it is enforced in the
 /// API, which accepts Google ID tokens and nothing else — not by hiding UI here.
+///
+/// Reached from Settings, not a gate the app forces on launch — the app works
+/// fully offline, so signing in is something a user opts into, not a
+/// prerequisite. See [BudgetRefresh] and `profileRepositoryProvider` for how
+/// the app switches from local to server-backed data once this succeeds.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -19,13 +25,22 @@ class SignInScreen extends ConsumerStatefulWidget {
 class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _busy = false;
 
-  Future<void> _signIn() async {
+  Future<void> _signIn({bool local = false}) async {
     setState(() => _busy = true);
     try {
-      await ref.read(googleAuthServiceProvider).signIn();
-      // No navigation here. The router's redirect watches the session and moves
-      // the user itself, so there is exactly one place that decides where a
-      // signed-in user belongs.
+      final service = ref.read(googleAuthServiceProvider);
+      if (local) {
+        await service.signInLocally();
+      } else {
+        await service.signIn();
+      }
+      await ref.read(sessionProvider.notifier).refreshFromStorage();
+      // Every provider that depended on "signed in or not" now needs to
+      // re-resolve against the server instead of the local database.
+      ref
+        ..refreshBudgetData()
+        ..invalidate(profileProvider);
+      if (mounted) Navigator.of(context).pop();
     } on Object catch (error) {
       if (mounted) showFailure(context, error);
     } finally {
@@ -43,42 +58,73 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Column(
             children: [
-              const Spacer(flex: 2),
-              Text('💰', style: theme.textTheme.displayLarge),
-              const SizedBox(height: 20),
-              Text(
-                'BudgetWise',
-                style: theme.textTheme.displaySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'BudgetWise',
+                        style: theme.textTheme.displayMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'EARN · SAVE · INVEST · SPEND',
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      Text(
+                        'Decide where every rupee goes before you spend it — '
+                        'not after.',
+                        textAlign: TextAlign.center,
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Earn → Save → Invest → Spend',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  color: theme.colorScheme.primary,
-                  letterSpacing: 0.4,
+              const SizedBox(height: 40),
+              if (!Env.devLogin)
+                _GoogleButton(busy: _busy, onPressed: _busy ? null : _signIn),
+              if (Env.devLogin) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : () => _signIn(local: true),
+                  icon: _busy
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2.4),
+                        )
+                      : const Icon(Icons.dns_outlined, size: 18),
+                  label: const Text('Sign in to local dev server'),
                 ),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Decide where every rupee goes before you spend it — '
-                'not after.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.5,
+                const SizedBox(height: 8),
+                Text(
+                  'DEV BUILD · NEEDS A LOCAL SERVER RUNNING',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 1.2,
+                  ),
                 ),
-              ),
-              const Spacer(flex: 3),
-              _GoogleButton(busy: _busy, onPressed: _busy ? null : _signIn),
+              ],
               const SizedBox(height: 16),
               Text(
-                'We only ever see your name, email and profile picture.',
+                'Optional. Anything already on this device stays here and '
+                'reappears if you sign out.',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
+                style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: 28),
             ],

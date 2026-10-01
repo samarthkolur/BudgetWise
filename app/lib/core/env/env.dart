@@ -32,6 +32,15 @@ abstract final class Env {
     'GOOGLE_IOS_CLIENT_ID',
   );
 
+  /// Shows the local sign-in button and lets the app start without a Google
+  /// client ID.
+  ///
+  /// A build-time constant, so a release build compiled without it contains no
+  /// path to the dev endpoint at all — the button is not hidden, it does not
+  /// exist. The server has its own, independent guard: even a build with this
+  /// on can only reach a server that also enabled it, against a local database.
+  static const devLogin = bool.fromEnvironment('DEV_LOGIN');
+
   static bool get isConfigured => missingKeys.isEmpty;
 
   /// Names what is missing, so a misconfigured build says so on screen instead
@@ -46,7 +55,9 @@ abstract final class Env {
   /// exactly what this check exists to prevent.
   static List<String> get missingKeys => [
     if (_unset(apiBaseUrl)) 'API_BASE_URL',
-    if (_unset(googleWebClientId)) 'GOOGLE_WEB_CLIENT_ID',
+    // Not needed when signing in locally — the whole point of DEV_LOGIN is that
+    // the stack runs with no cloud service configured.
+    if (!devLogin && _unset(googleWebClientId)) 'GOOGLE_WEB_CLIENT_ID',
   ];
 
   static bool _unset(String value) =>

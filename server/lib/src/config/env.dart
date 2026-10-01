@@ -16,17 +16,25 @@ class Env {
     required this.port,
     required this.accessTokenTtl,
     required this.refreshTokenTtl,
+    this.allowDevLogin = false,
   });
 
   factory Env.fromPlatform([Map<String, String>? source]) {
     final env = source ?? Platform.environment;
 
+    final allowDevLogin =
+        (env['ALLOW_DEV_LOGIN'] ?? '').toLowerCase() == 'true';
+
+    // GOOGLE_WEB_CLIENT_ID is required only when Google sign-in is the way in.
+    // With dev login enabled the stack runs with no cloud service at all, and
+    // demanding a Google client would defeat the point.
+    final required = <String>[
+      'MONGO_URI',
+      'JWT_SECRET',
+      if (!allowDevLogin) 'GOOGLE_WEB_CLIENT_ID',
+    ];
     final missing = <String>[
-      for (final key in const [
-        'MONGO_URI',
-        'JWT_SECRET',
-        'GOOGLE_WEB_CLIENT_ID',
-      ])
+      for (final key in required)
         if ((env[key] ?? '').trim().isEmpty) key,
     ];
     if (missing.isNotEmpty) {
@@ -47,11 +55,29 @@ class Env {
       );
     }
 
+    final mongoUri = env['MONGO_URI']!;
+
+    // The guard that actually matters. The flag alone can be set by accident;
+    // the flag AND a loopback database together cannot describe a production
+    // deployment. Failing here is loud and immediate — the alternative is a
+    // server that looks healthy while handing out sessions for nothing.
+    if (allowDevLogin && !isLocalDatabase(mongoUri)) {
+      throw const ConfigException(
+        'ALLOW_DEV_LOGIN is set, but MONGO_URI does not point at a local '
+        'database.\n'
+        'Dev login is an authentication bypass and is refused against any '
+        'non-local database.',
+      );
+    }
+
     return Env(
-      mongoUri: env['MONGO_URI']!,
+      allowDevLogin: allowDevLogin,
+      mongoUri: mongoUri,
       databaseName: env['MONGO_DB'] ?? 'budgetwise',
       jwtSecret: secret,
-      googleWebClientId: env['GOOGLE_WEB_CLIENT_ID']!,
+      // Empty is legitimate under dev login and impossible otherwise — the
+      // required-keys check above already rejected it.
+      googleWebClientId: env['GOOGLE_WEB_CLIENT_ID'] ?? '',
       googleAndroidClientId: env['GOOGLE_ANDROID_CLIENT_ID'] ?? '',
       googleIosClientId: env['GOOGLE_IOS_CLIENT_ID'] ?? '',
       port: int.tryParse(env['PORT'] ?? '') ?? 8080,
@@ -66,6 +92,10 @@ class Env {
 
   final String mongoUri;
   final String databaseName;
+
+  /// Enables `/v1/auth/dev/login`, which issues a session with no credential.
+  /// Only ever true against a local database — see [Env.fromPlatform].
+  final bool allowDevLogin;
 
   /// Signs our own access tokens. Never leaves the server.
   final String jwtSecret;
@@ -83,6 +113,20 @@ class Env {
   final int port;
   final Duration accessTokenTtl;
   final Duration refreshTokenTtl;
+
+  /// True only for a database on this machine.
+  ///
+  /// `mongodb+srv://` is rejected outright: it is the Atlas scheme, and there is
+  /// no such thing as a loopback SRV cluster.
+  static bool isLocalDatabase(String uri) {
+    if (uri.startsWith('mongodb+srv://')) return false;
+    final host = Uri.tryParse(uri)?.host.toLowerCase() ?? '';
+    return host == 'localhost' ||
+        host == '127.0.0.1' ||
+        host == '::1' ||
+        host == 'host.docker.internal' ||
+        host == 'mongo';
+  }
 
   Set<String> get allowedAudiences => {
     googleWebClientId,

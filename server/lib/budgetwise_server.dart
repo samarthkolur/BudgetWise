@@ -8,6 +8,7 @@ import 'package:budgetwise_server/src/http/errors.dart';
 import 'package:budgetwise_server/src/http/middleware.dart';
 import 'package:budgetwise_server/src/routes/api_routes.dart';
 import 'package:budgetwise_server/src/routes/auth_routes.dart';
+import 'package:budgetwise_server/src/routes/dev_routes.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
@@ -47,8 +48,27 @@ class BudgetWiseApi {
   final TokenService tokens;
 
   Handler get handler {
-    final root = Router()
-      ..get('/health', (Request _) => jsonResponse({'status': 'ok'}))
+    final root = Router();
+
+    // Mounted BEFORE /v1/auth, because shelf_router matches mounts in order and
+    // the broader prefix would otherwise swallow this one — the request would
+    // fall through to the authenticated /v1 mount and come back 401.
+    //
+    // Only mounted when enabled, so a disabled dev login is reachable by no
+    // route at all.
+    if (env.allowDevLogin) {
+      root.mount(
+        '/v1/auth/dev',
+        DevRoutes(mongo: mongo, tokens: tokens).router.call,
+      );
+    }
+
+    root
+      ..get(
+        '/health',
+        (Request _) =>
+            jsonResponse({'status': 'ok', 'devLogin': env.allowDevLogin}),
+      )
       // Auth is deliberately outside requireAuth — it is how a session begins.
       ..mount(
         '/v1/auth',
