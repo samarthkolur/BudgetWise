@@ -161,10 +161,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
               child: Container(
                 height: 4,
                 width: 40,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.outlineVariant,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+                color: theme.colorScheme.outlineVariant,
               ),
             ),
             const SizedBox(height: 18),
@@ -220,7 +217,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
                       label: Text(category.name),
                       labelStyle: _categoryId == category.id
                           ? theme.textTheme.labelMedium?.copyWith(
-                              color: Colors.white,
+                              color: theme.colorScheme.onPrimary,
                             )
                           : null,
                       selected: _categoryId == category.id,
