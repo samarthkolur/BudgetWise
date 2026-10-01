@@ -31,7 +31,7 @@ class CategoryCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(Gap.md),
-        decoration: AppTheme.card(scheme, radius: 16),
+        decoration: AppTheme.card(scheme),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,

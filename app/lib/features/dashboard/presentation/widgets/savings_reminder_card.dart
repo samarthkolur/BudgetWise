@@ -110,23 +110,20 @@ class _SavingsReminderCardState extends ConsumerState<SavingsReminderCard> {
                   horizontal: 16,
                   vertical: 10,
                 ),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF1B2340),
-                  borderRadius: BorderRadius.all(Radius.circular(100)),
-                ),
+                decoration: BoxDecoration(color: scheme.secondary),
                 child: _busy
-                    ? const SizedBox(
+                    ? SizedBox(
                         height: 16,
                         width: 16,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: scheme.onSecondary,
                         ),
                       )
                     : Text(
                         "I've moved it",
                         style: theme.textTheme.labelLarge?.copyWith(
-                          color: Colors.white,
+                          color: scheme.onSecondary,
                           fontSize: 13,
                         ),
                       ),

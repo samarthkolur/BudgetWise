@@ -291,11 +291,7 @@ class _SafeToSpendFigure extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(Gap.xl),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B2340),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: AppTheme.cardShadow(Brightness.light),
-      ),
+      decoration: AppTheme.card(scheme),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -329,19 +325,16 @@ class _SafeToSpendFigure extends StatelessWidget {
             ),
           ),
           Gap.h16,
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: SizedBox(
-              height: 6,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(end: spentRatio),
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
-                builder: (context, animated, _) => LinearProgressIndicator(
-                  value: animated,
-                  backgroundColor: Colors.white.withValues(alpha: 0.12),
-                  valueColor: AlwaysStoppedAnimation(tone),
-                ),
+          SizedBox(
+            height: 6,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(end: spentRatio),
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOutCubic,
+              builder: (context, animated, _) => LinearProgressIndicator(
+                value: animated,
+                backgroundColor: Colors.white.withValues(alpha: 0.12),
+                valueColor: AlwaysStoppedAnimation(tone),
               ),
             ),
           ),
@@ -517,7 +510,7 @@ class _CategorySkeleton extends StatelessWidget {
       children: [
         for (var i = 0; i < 4; i++)
           Container(
-            decoration: AppTheme.card(scheme, radius: 16),
+            decoration: AppTheme.card(scheme),
           ),
       ],
     );
