@@ -6,6 +6,7 @@ import 'package:budgetwise/features/budget/data/budget_repository.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/expenses/data/expense_repository.dart';
 import 'package:budgetwise/features/goals/data/goal_repository.dart';
+import 'package:budgetwise/features/sms_detection/data/detected_expense_repository.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -263,7 +264,65 @@ class FakeProfileRepository implements ProfileRepository {
   Future<void> deleteAccount() async {}
 }
 
-/// Wraps a screen the same way the real app does — themed, with the four
+class FakeDetectedExpenseRepository implements DetectedExpenseRepository {
+  FakeDetectedExpenseRepository({List<DetectedExpense>? seed})
+    : _pending = [...?seed];
+
+  final List<DetectedExpense> _pending;
+  var _nextId = 0;
+
+  @override
+  Future<void> recordCandidates(
+    String budgetId,
+    List<({String dedupKey, DetectedTransaction transaction})> candidates,
+  ) async {
+    for (final candidate in candidates) {
+      final transaction = candidate.transaction;
+      _pending.add(
+        DetectedExpense(
+          id: 'detected-${_nextId++}',
+          budgetId: budgetId,
+          amount: transaction.amount,
+          occurredOn: transaction.occurredOn,
+          merchant: transaction.merchant,
+          rawSender: transaction.rawSender,
+          rawBody: transaction.rawBody,
+        ),
+      );
+    }
+  }
+
+  @override
+  Future<List<DetectedExpense>> pendingFor(String budgetId) async =>
+      List.unmodifiable(_pending.where((d) => d.budgetId == budgetId));
+
+  @override
+  Future<void> categorize({
+    required DetectedExpense detected,
+    required String categoryId,
+    required ExpenseRepository expenses,
+  }) async {
+    await expenses.add(
+      budgetId: detected.budgetId,
+      categoryId: categoryId,
+      amount: detected.amount,
+      spentOn: detected.occurredOn,
+      paymentMethod: PaymentMethod.upi,
+      note: detected.merchant,
+    );
+    _pending.removeWhere((d) => d.id == detected.id);
+  }
+
+  @override
+  Future<void> dismiss(String id) async =>
+      _pending.removeWhere((d) => d.id == id);
+
+  @override
+  Future<void> dismissAllPending(String budgetId) async =>
+      _pending.removeWhere((d) => d.budgetId == budgetId);
+}
+
+/// Wraps a screen the same way the real app does — themed, with the
 /// repository providers replaced by fakes — without touching go_router
 /// (screens under test are pushed directly as `home`, not routed to).
 Widget pumpableApp({
@@ -272,6 +331,8 @@ Widget pumpableApp({
   BudgetRepository? budgetRepository,
   ExpenseRepository? expenseRepository,
   ProfileRepository? profileRepository,
+  DetectedExpenseRepository? detectedExpenseRepository,
+  bool smsCapable = false,
 }) {
   return ProviderScope(
     overrides: [
@@ -287,7 +348,11 @@ Widget pumpableApp({
       profileRepositoryProvider.overrideWithValue(
         profileRepository ?? FakeProfileRepository(),
       ),
+      detectedExpenseRepositoryProvider.overrideWithValue(
+        detectedExpenseRepository ?? FakeDetectedExpenseRepository(),
+      ),
+      smsCapableProvider.overrideWithValue(smsCapable),
     ],
-    child: MaterialApp(theme: AppTheme.light(), home: child),
+    child: MaterialApp(theme: AppTheme.theme(), home: child),
   );
 }

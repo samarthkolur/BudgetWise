@@ -26,8 +26,7 @@ class BudgetWiseApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'BudgetWise',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.dark(),
+      theme: AppTheme.theme(),
       scrollBehavior: AppScrollBehavior(),
       routerConfig: ref.watch(routerProvider),
     );
@@ -46,7 +45,7 @@ class _MisconfiguredApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      theme: AppTheme.theme(),
       home: Scaffold(
         body: Center(
           child: Padding(
