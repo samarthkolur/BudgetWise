@@ -121,7 +121,7 @@ class OnboardingController extends Notifier<OnboardingState> {
       state = state.copyWith(savingsMode: mode);
 
   void setSavingsPercent(double percent) =>
-      state = state.copyWith(savingsPercent: percent.clamp(0, 90));
+      state = state.copyWith(savingsPercent: percent.clamp(0, 100));
 
   void setSavingsFixed(Money amount) =>
       state = state.copyWith(savingsFixed: amount);

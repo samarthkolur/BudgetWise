@@ -4,18 +4,31 @@ import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:budgetwise/core/widgets/motion.dart';
-import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/onboarding/application/onboarding_controller.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Five screens, matching the Claude Design prototype exactly: a welcome
-/// screen, then three counted steps (income, savings, allocation), then a
-/// success screen — each screen owns its own header and its own bottom
-/// button, the way the prototype does it, rather than one shared app bar and
-/// one shared button wrapping every page.
+/// Four screens: a welcome screen, two counted steps (income, savings), then
+/// a success screen — each screen owns its own header and its own bottom
+/// button, the way the original Claude Design prototype did it, rather than
+/// one shared app bar and one shared button wrapping every page.
+///
+/// **There is no manual category-allocation step.** There used to be a third
+/// counted step here — one slider per category, required to sum to exactly
+/// 100% before you could continue — and it was cut after real-user feedback
+/// called it "useless" friction with "a lot of typing," the kind of thing
+/// that loses signups at exactly the point a new user has the least patience
+/// for homework. `OnboardingState.categoryPercents` already defaults to
+/// `kDefaultCategories`' built-in split the moment onboarding starts (see
+/// `OnboardingController.build()`), and that default is already balanced —
+/// so `submit()` has always worked without the user ever touching a slider.
+/// The per-category sliders were deleted outright rather than hidden behind
+/// a flag — there is no "advanced" entry point to them anywhere in the app
+/// right now. If per-category control at setup time turns out to matter
+/// after all, build it back deliberately as its own screen reached from
+/// Settings or the dashboard, not as a gate in front of onboarding.
 ///
 /// One real addition the prototype doesn't have: a name field, folded into
 /// the welcome screen rather than given its own step. The prototype's demo
@@ -32,7 +45,7 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  static const _pageCount = 5;
+  static const _pageCount = 4;
 
   final _controller = PageController();
   int _step = 0;
@@ -61,8 +74,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// dashboard rather than stepping through the rest of the wizard.
   /// Savings percent and the category split already default to sensible
   /// values from the moment onboarding starts, so income is the only real
-  /// gap; `resetToDefaults` guards against a partially-edited, unbalanced
-  /// allocation left over from an earlier step.
+  /// gap. `resetToDefaults` is defensive, not load-bearing, now that nothing
+  /// in this flow lets the split go unbalanced in the first place.
   Future<void> _skip() async {
     final controller = ref.read(onboardingControllerProvider.notifier);
     final state = ref.read(onboardingControllerProvider);
@@ -101,7 +114,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             _WelcomeStep(onNext: _next, onSkip: _skip),
             _IncomeStep(onNext: _next, onBack: _back, onSkip: _skip),
             _SavingsStep(onNext: _next, onBack: _back, onSkip: _skip),
-            _AllocationStep(onNext: _next, onBack: _back, onSkip: _skip),
             _SuccessStep(onFinish: _finish),
           ],
         ),
@@ -145,7 +157,7 @@ class _StepHeader extends StatelessWidget {
                 ),
         ),
         Text(
-          'STEP $step OF 3',
+          'STEP $step OF 2',
           style: theme.textTheme.labelMedium?.copyWith(
             letterSpacing: 1,
             fontWeight: FontWeight.w700,
@@ -181,23 +193,27 @@ class _StepButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: enabled ? 1 : 0.4,
-      duration: const Duration(milliseconds: 200),
-      child: PressableScale(
-        child: FilledButton(
-          onPressed: enabled && !busy ? onTap : null,
-          child: busy
-              ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: Colors.white,
-                  ),
-                )
-              : Text(label),
-        ),
+    final scheme = Theme.of(context).colorScheme;
+    // Disabled state is communicated by the theme's own disabled colours
+    // (see FilledButtonThemeData) — not a second opacity fade stacked on
+    // top, which is what made this button nearly invisible before: 12%
+    // alpha from Material's own disabled styling, faded again to 40% by
+    // this widget, against a canvas that is already almost black.
+    return PressableScale(
+      child: FilledButton(
+        onPressed: enabled && !busy ? onTap : null,
+        child: busy
+            ? SizedBox(
+                height: 22,
+                width: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  // onPrimary, not white — this spinner sits on the same
+                  // lime fill as the button's own enabled state.
+                  color: scheme.onPrimary,
+                ),
+              )
+            : Text(label),
       ),
     );
   }
@@ -349,14 +365,16 @@ class _JourneyBadges extends StatelessWidget {
       height: 34,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        shape: BoxShape.circle,
         color: active ? scheme.primary : scheme.surfaceContainerLow,
         border: active ? null : Border.all(color: scheme.outlineVariant),
       ),
       child: Text(
         letter,
         style: theme.textTheme.labelLarge?.copyWith(
-          color: active ? Colors.white : scheme.onSurface,
+          // The active badge sits on lime, which is light enough that white
+          // text nearly disappears into it — onPrimary (near-black) is the
+          // same text-on-lime pairing every button in the app already uses.
+          color: active ? scheme.onPrimary : scheme.onSurface,
         ),
       ),
     );
@@ -403,6 +421,7 @@ class _IncomeStep extends ConsumerStatefulWidget {
 
 class _IncomeStepState extends ConsumerState<_IncomeStep> {
   late final TextEditingController _field;
+  final _focusNode = FocusNode();
 
   static final _quickIncomes = [
     15000,
@@ -418,11 +437,24 @@ class _IncomeStepState extends ConsumerState<_IncomeStep> {
     _field = TextEditingController(
       text: income.isZero ? '' : income.asRupees.toStringAsFixed(0),
     );
+    // Not `autofocus: true`: requesting focus in the same frame the page
+    // transition starts races the welcome screen's still-closing text
+    // field, and Gboard sometimes loses that race by keeping the alphabetic
+    // layout it already had open instead of switching to this field's
+    // numeric `keyboardType`. Unfocusing the old field explicitly, then
+    // requesting focus on this one only after the frame settles, gives the
+    // IME a clean request to respond to instead of two competing ones.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusManager.instance.primaryFocus?.unfocus();
+      _focusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _field.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -487,7 +519,7 @@ class _IncomeStepState extends ConsumerState<_IncomeStep> {
                         Expanded(
                           child: TextField(
                             controller: _field,
-                            autofocus: true,
+                            focusNode: _focusNode,
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
@@ -647,7 +679,7 @@ class _SavingsStep extends ConsumerWidget {
             ),
           ),
           Gap.h20,
-          _StepButton(label: 'Continue', onTap: onNext),
+          _StepButton(label: 'Create my plan', onTap: onNext),
         ],
       ),
     );
@@ -665,8 +697,8 @@ class _PercentSlider extends StatelessWidget {
     return Slider(
       value: state.savingsPercent,
       min: 5,
-      max: 60,
-      divisions: 55,
+      max: 100,
+      divisions: 95,
       label: '${state.savingsPercent.toStringAsFixed(0)}%',
       onChanged: controller.setSavingsPercent,
     );
@@ -704,185 +736,7 @@ class _FixedAmountField extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Step 3 — the split: one uniform, inline-slider card per category
-// ---------------------------------------------------------------------------
-
-class _AllocationStep extends ConsumerWidget {
-  const _AllocationStep({
-    required this.onNext,
-    required this.onBack,
-    required this.onSkip,
-  });
-
-  final VoidCallback onNext;
-  final VoidCallback onBack;
-  final Future<void> Function() onSkip;
-
-  static const _dotColors = [
-    Color(0xFFFF6B4A),
-    Color(0xFF1B2340),
-    Color(0xFF3A9D68),
-    Color(0xFFC97F1E),
-    Color(0xFF4C5FA8),
-    Color(0xFFD64545),
-  ];
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(onboardingControllerProvider);
-    final controller = ref.read(onboardingControllerProvider.notifier);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _StepHeader(step: 3, onBack: onBack, onSkip: onSkip),
-          Gap.h16,
-          Text(
-            'Now, divide the rest',
-            style: theme.textTheme.headlineMedium?.copyWith(fontSize: 22),
-          ),
-          Gap.h4,
-          Text(
-            'Allocate ${state.spendable.format()} across your categories.',
-            style: theme.textTheme.bodyMedium,
-          ),
-          Gap.h16,
-          Expanded(
-            child: ListView(
-              children: [
-                for (var i = 0; i < kDefaultCategories.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _CategorySliderCard(
-                      template: kDefaultCategories[i],
-                      percent:
-                          state.categoryPercents[kDefaultCategories[i].key] ??
-                          0,
-                      amount: state.amountFor(kDefaultCategories[i].key),
-                      dotColor: _dotColors[i % _dotColors.length],
-                      onChanged: (value) => controller.setCategoryPercent(
-                        kDefaultCategories[i].key,
-                        value,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Text(
-                  state.isBalanced
-                      ? 'Every rupee is assigned'
-                      : state.remainingPercent > 0
-                      ? '${state.remainingPercent.toStringAsFixed(1)}% unassigned'
-                      : '${state.remainingPercent.abs().toStringAsFixed(1)}% over',
-                  style: theme.textTheme.bodyMedium,
-                ),
-              ),
-              PressableScale.onTap(
-                onTap: () {
-                  AppHaptics.tap();
-                  controller.resetToDefaults();
-                },
-                child: Text(
-                  'Auto-balance',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          Gap.h12,
-          _StepButton(
-            label: 'Create my plan',
-            enabled: state.isBalanced,
-            onTap: onNext,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CategorySliderCard extends StatelessWidget {
-  const _CategorySliderCard({
-    required this.template,
-    required this.percent,
-    required this.amount,
-    required this.dotColor,
-    required this.onChanged,
-  });
-
-  final CategoryTemplate template;
-  final double percent;
-  final Money amount;
-  final Color dotColor;
-  final ValueChanged<double> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: AppTheme.card(scheme, radius: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: dotColor,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  Gap.w8,
-                  Text(template.name, style: theme.textTheme.titleSmall),
-                  Gap.w8,
-                  Text(
-                    '${percent.toStringAsFixed(0)}%',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              Text(
-                amount.formatCompact(),
-                style: theme.textTheme.titleSmall?.money.copyWith(
-                  color: scheme.primary,
-                ),
-              ),
-            ],
-          ),
-          Slider(
-            value: percent.clamp(0, 60),
-            max: 60,
-            divisions: 60,
-            onChanged: onChanged,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Step 4 — success
+// Step 3 — success
 // ---------------------------------------------------------------------------
 
 class _SuccessStep extends ConsumerWidget {
@@ -909,13 +763,13 @@ class _SuccessStep extends ConsumerWidget {
                   width: 64,
                   height: 64,
                   alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: scheme.primary,
-                  ),
-                  child: const Icon(
+                  color: scheme.primary,
+                  // onPrimary (near-black), not white — lime is light enough
+                  // that white nearly disappears into it. Same fix as the
+                  // welcome screen's journey badges.
+                  child: Icon(
                     Icons.check_rounded,
-                    color: Colors.white,
+                    color: scheme.onPrimary,
                     size: 32,
                   ),
                 ),

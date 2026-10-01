@@ -10,7 +10,7 @@ void main() {
   });
 
   testWidgets(
-    'walking all five steps with the default allocation reaches the '
+    'walking all four steps with the default category split reaches the '
     'dashboard-bound success screen with no exceptions',
     (tester) async {
       await tester.pumpWidget(pumpableApp(child: const OnboardingScreen()));
@@ -33,18 +33,16 @@ void main() {
       await tester.tap(find.text('Continue'));
       await tester.pumpAndSettle();
 
-      // Step 2 — savings: defaults are already valid, just continue.
+      // Step 2 — savings: defaults are already valid. There is no separate
+      // per-category allocation step any more — the default split
+      // (`kDefaultCategories`) already sums to 100%, and the "deciding
+      // savings" screen is the last one before the plan is actually created,
+      // so its own button reads as the finishing action.
       expect(find.text('How much will you save first?'), findsOneWidget);
-      await tester.tap(find.text('Continue'));
-      await tester.pumpAndSettle();
-
-      // Step 3 — allocation: the default split already sums to 100%.
-      expect(find.text('Now, divide the rest'), findsOneWidget);
-      expect(find.text('Every rupee is assigned'), findsOneWidget);
       await tester.tap(find.text('Create my plan'));
       await tester.pumpAndSettle();
 
-      // Step 4 — success.
+      // Step 3 — success.
       expect(find.textContaining('plan is ready!'), findsOneWidget);
       expect(find.text('Go to dashboard'), findsOneWidget);
       expect(tester.takeException(), isNull);
