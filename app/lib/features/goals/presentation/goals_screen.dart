@@ -38,16 +38,11 @@ class GoalsScreen extends ConsumerWidget {
                   horizontal: 14,
                   vertical: 8,
                 ),
-                decoration: BoxDecoration(
-                  color: scheme.primary,
-                  borderRadius: BorderRadius.circular(100),
-                ),
+                decoration: BoxDecoration(color: scheme.primary),
                 child: Text(
                   '+ New',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontFamily: AppType.display,
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: scheme.onPrimary,
                   ),
                 ),
               ),
