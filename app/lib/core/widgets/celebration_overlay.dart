@@ -5,8 +5,8 @@ import 'package:budgetwise/core/theme/app_typography.dart';
 import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:flutter/material.dart';
 
-/// The investing-unlock celebration: a full-screen navy takeover with falling
-/// confetti and a diamond streak badge.
+/// The investing-unlock celebration: a full-screen near-black takeover with
+/// falling square confetti and a violet streak badge, hard-shadowed in lime.
 ///
 /// This is the one deliberate exception to the app's usual restraint around
 /// gamification — reserved for the single real milestone the whole "pay
@@ -61,7 +61,7 @@ class _CelebrationScreenState extends State<_CelebrationScreen>
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1B2340),
+      backgroundColor: const Color(0xFF0A0A0A),
       body: SafeArea(
         child: Stack(
           children: [
@@ -79,34 +79,26 @@ class _CelebrationScreenState extends State<_CelebrationScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Transform.rotate(
-                    angle: math.pi / 4,
-                    child: Container(
-                      width: 84,
-                      height: 84,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6B4A),
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x66FF6B4A),
-                            blurRadius: 30,
-                            offset: Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: Transform.rotate(
-                          angle: -math.pi / 4,
-                          child: Text(
-                            '${widget.streakMonths}',
-                            style: const TextStyle(
-                              fontFamily: AppType.display,
-                              fontSize: 30,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
+                  Container(
+                    width: 84,
+                    height: 84,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF7B5CFF),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Color(0xFFD4FF3D),
+                          offset: Offset(6, 6),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${widget.streakMonths}',
+                        style: const TextStyle(
+                          fontFamily: AppType.display,
+                          fontSize: 30,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -118,7 +110,7 @@ class _CelebrationScreenState extends State<_CelebrationScreen>
                     style: TextStyle(
                       fontFamily: AppType.display,
                       fontSize: 24,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w900,
                       color: Colors.white,
                     ),
                   ),
@@ -145,17 +137,14 @@ class _CelebrationScreenState extends State<_CelebrationScreen>
                         horizontal: 32,
                         vertical: 16,
                       ),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFF6B4A),
-                        borderRadius: BorderRadius.all(Radius.circular(100)),
-                      ),
+                      decoration: const BoxDecoration(color: Color(0xFFD4FF3D)),
                       child: const Text(
                         "Let's go",
                         style: TextStyle(
-                          fontFamily: AppType.display,
+                          fontFamily: AppType.body,
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          color: Color(0xFF0A0A0A),
                         ),
                       ),
                     ),
@@ -171,18 +160,26 @@ class _CelebrationScreenState extends State<_CelebrationScreen>
 }
 
 /// A handful of falling, rotating confetti pieces, each on its own phase and
-/// speed so the loop doesn't read as a single repeating stamp.
+/// speed so the loop doesn't read as a single repeating stamp. Square only,
+/// in the page's own three colours — a rainbow burst would be the one thing
+/// in this screen breaking the "one or two accents" rule.
 class _ConfettiPainter extends CustomPainter {
   _ConfettiPainter(this.t);
 
   final double t;
 
+  static const _colors = [
+    Color(0xFFD4FF3D),
+    Color(0xFF7B5CFF),
+    Colors.white,
+  ];
+
   static const _pieces = [
-    (x: 0.15, phase: 0.0, speed: 1.0, square: true, white: false),
-    (x: 0.30, phase: 0.3, speed: 0.85, square: false, white: true),
-    (x: 0.48, phase: 0.6, speed: 1.1, square: true, white: false),
-    (x: 0.64, phase: 0.15, speed: 0.95, square: false, white: true),
-    (x: 0.80, phase: 0.45, speed: 1.05, square: true, white: false),
+    (x: 0.15, phase: 0.0, speed: 1.0, color: 0),
+    (x: 0.30, phase: 0.3, speed: 0.85, color: 2),
+    (x: 0.48, phase: 0.6, speed: 1.1, color: 1),
+    (x: 0.64, phase: 0.15, speed: 0.95, color: 2),
+    (x: 0.80, phase: 0.45, speed: 1.05, color: 0),
   ];
 
   @override
@@ -193,19 +190,16 @@ class _ConfettiPainter extends CustomPainter {
       final opacity = local < 0.1 ? local / 0.1 : (1 - local).clamp(0.0, 1.0);
       final dx = size.width * piece.x;
       final paint = Paint()
-        ..color = (piece.white ? Colors.white : const Color(0xFFFF6B4A))
-            .withValues(alpha: opacity.clamp(0.0, 1.0) * 0.9);
+        ..color = _colors[piece.color].withValues(
+          alpha: opacity.clamp(0.0, 1.0) * 0.9,
+        );
 
       canvas
         ..save()
         ..translate(dx, y)
-        ..rotate(local * math.pi * 2);
-      if (piece.square) {
-        canvas.drawRect(const Rect.fromLTWH(-4, -4, 8, 8), paint);
-      } else {
-        canvas.drawCircle(Offset.zero, 4, paint);
-      }
-      canvas.restore();
+        ..rotate(local * math.pi * 2)
+        ..drawRect(const Rect.fromLTWH(-4, -4, 8, 8), paint)
+        ..restore();
     }
   }
 

@@ -3,115 +3,104 @@ import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// Warm and tactile, built from the "BudgetWise Prototype" Claude Design
-/// mockup.
+/// Dark, sharp-cornered, grey by default — "Obsidian", built from public
+/// reporting on CRED's NeoPOP design system after a first re-skin attempt
+/// (rounded, light, illustrated) went looking for "pop art meets
+/// skeuomorphism" and found a carnival instead of a club. See the design
+/// system entry in `CLAUDE.md` for the research and the before/after.
 ///
-/// This supersedes the app's original flat/no-elevation language. That
-/// earlier system is documented in git history and in the superseded
-/// paragraphs this file used to carry; the short version is that the product
-/// owner reviewed a from-scratch visual prototype and chose to move the whole
-/// app onto it rather than reconcile the two languages piecemeal:
+/// This supersedes the app's second design language (the Claude Design
+/// prototype: warm cream, soft shadows, Space Grotesk). That system is
+/// documented in git history; the short version of what changed and why:
 ///
-/// - **Soft-shadow cards, not hairlines.** Separation comes from a white
-///   surface + a faint border + a soft drop shadow (light theme only — see
-///   [cardShadow]). Dark theme keeps a border-only treatment, since a drop
-///   shadow reads as a smudge once the surface itself is already dark.
-/// - **One warm accent** (`#FF6B4A`), used only where the eye must go, paired
-///   with a navy ink (`#1B2340`) instead of a neutral grey — money apps
-///   default to blue-on-grey, which reads as banking; this pairing reads as
-///   considered rather than corporate.
-/// - **Semantic colour is reserved for budget state.** Green/amber/red mean
-///   healthy/warning/exceeded and are used for nothing decorative, so a red
-///   number on this screen always means the same thing.
+/// - **Dark-only, not a theme toggle.** CRED ships dark-only by explicit
+///   product decision, not omission, and that restraint is load-bearing —
+///   see [theme]. There is no light variant any more.
+/// - **Zero border-radius, everywhere, no exceptions.** Every card, button,
+///   chip and sheet is a sharp rectangle. That single rule is most of the
+///   visual signature; see [card].
+/// - **Grey does the talking.** The canvas and almost every surface are
+///   shades of near-black and grey. Colour is spent on exactly one or two
+///   things per screen — never painted across a whole panel.
+/// - **Semantic colour keeps its name, not its hue.** [AppColors.healthy],
+///   [AppColors.warning], [AppColors.exceeded] and [AppColors.advisory] are
+///   unchanged as concepts (and as call sites — nothing downstream of the
+///   extension needed to change), only remapped to the new palette.
 abstract final class AppTheme {
-  static const _accent = Color(0xFFFF6B4A);
-  static const _inkLight = Color(0xFF1B2340);
-  static const _inkDark = Color(0xFFF2F1EC);
+  // Canvas & surfaces.
+  static const _bg = Color(0xFF0A0A0A);
+  static const _surface = Color(0xFF141414);
+  static const _surfaceAlt = Color(0xFF1B1B1B);
+  static const _surfaceHigh = Color(0xFF232323);
+  static const _surfaceHighest = Color(0xFF2E2E2E);
+  static const _stroke = Color(0xFF2B2B2B);
+  static const _text = Color(0xFFF5F5F2);
+  static const _textDim = Color(0xFFC9C9C4);
+  static const _textMute = Color(0xFFA3A39D);
 
-  static ThemeData light() => _build(Brightness.light);
-  static ThemeData dark() => _build(Brightness.dark);
+  // Voltages. Lime is the default interactive accent (primary); violet is
+  // reserved for the one deliberate action per screen — see [AppColors].
+  static const _lime = Color(0xFFD4FF3D);
+  static const _violet = Color(0xFF7B5CFF);
+  static const _amber = Color(0xFFFF8A3D);
+  static const _red = Color(0xFFFF5C5C);
 
-  /// The soft card shadow, light theme only. Dark theme returns an empty
-  /// list — a drop shadow needs a lighter surface to fall *onto*, and a dark
-  /// background swallows it into a smudge instead.
-  static List<BoxShadow> cardShadow(Brightness brightness) =>
-      brightness == Brightness.light
-      ? const [
-          BoxShadow(
-            color: Color(0x0D1B2340),
-            offset: Offset(0, 2),
-            blurRadius: 8,
-          ),
-        ]
-      : const [];
+  static ThemeData theme() => _build();
+
+  /// Cards never carry a soft shadow in Obsidian — separation is a 1px
+  /// stroke, full stop. Kept as a method (rather than deleted outright) only
+  /// because [card] still calls it internally; nothing outside this file
+  /// should need it.
+  static List<BoxShadow> cardShadow() => const [];
 
   /// The shared "card" decoration every custom card container in the app
-  /// builds from: a surface colour, a faint border, [cardShadow], and a
-  /// radius. Centralised so the soft-shadow language stays one decision
-  /// instead of a `BoxShadow` copied into a dozen widgets.
-  static BoxDecoration card(
-    ColorScheme scheme, {
-    double radius = 20,
-    Color? color,
-    Color? tone,
-  }) => BoxDecoration(
-    color:
-        color ??
-        (tone == null
-            ? scheme.surfaceContainerLow
-            : Color.alphaBlend(
-                tone.withValues(alpha: 0.06),
-                scheme.surfaceContainerLow,
-              )),
-    borderRadius: BorderRadius.circular(radius),
-    border: Border.all(
-      color: tone == null
-          ? scheme.outlineVariant
-          : tone.withValues(alpha: 0.16),
-    ),
-    boxShadow: cardShadow(scheme.brightness),
-  );
+  /// builds from: a surface colour, a hairline stroke, and nothing else.
+  /// Sharp corners always — there is no `radius` parameter any more, because
+  /// there is no case in this design where a card gets one.
+  static BoxDecoration card(ColorScheme scheme, {Color? color, Color? tone}) =>
+      BoxDecoration(
+        color:
+            color ??
+            (tone == null
+                ? scheme.surfaceContainerLow
+                : Color.alphaBlend(
+                    tone.withValues(alpha: 0.10),
+                    scheme.surfaceContainerLow,
+                  )),
+        border: Border.all(
+          color: tone == null
+              ? scheme.outlineVariant
+              : tone.withValues(alpha: 0.5),
+        ),
+        boxShadow: cardShadow(),
+      );
 
-  static ThemeData _build(Brightness brightness) {
-    final isLight = brightness == Brightness.light;
-
-    // Hand-tuned neutrals rather than the seeded ones, for the same reason
-    // the original scheme avoided `fromSeed` for every surface: tinting
-    // everything toward the accent flattens the warm/cool contrast that
-    // makes navy-on-cream read as considered rather than corporate.
+  static ThemeData _build() {
     final scheme =
         ColorScheme.fromSeed(
-          seedColor: _accent,
-          brightness: brightness,
+          seedColor: _lime,
+          brightness: Brightness.dark,
         ).copyWith(
-          primary: _accent,
-          onPrimary: Colors.white,
-          surface: isLight ? const Color(0xFFF7F3EC) : const Color(0xFF11131B),
-          surfaceContainerLowest: isLight
-              ? const Color(0xFFFFFFFF)
-              : const Color(0xFF0B0C12),
-          surfaceContainerLow: isLight
-              ? const Color(0xFFFFFFFF)
-              : const Color(0xFF181B26),
-          surfaceContainer: isLight
-              ? const Color(0xFFF0ECE2)
-              : const Color(0xFF1E212E),
-          surfaceContainerHigh: isLight
-              ? const Color(0xFFE8E2D4)
-              : const Color(0xFF262A39),
-          surfaceContainerHighest: isLight
-              ? const Color(0xFFDED7C5)
-              : const Color(0xFF2E3241),
-          onSurface: isLight ? _inkLight : _inkDark,
-          onSurfaceVariant: isLight
-              ? const Color(0xFF5C6178)
-              : const Color(0xFFA6ABC0),
-          outlineVariant: isLight
-              ? const Color(0xFFE6E0D2)
-              : const Color(0xFF2A2E3D),
+          primary: _lime,
+          onPrimary: _bg,
+          secondary: _violet,
+          onSecondary: Colors.white,
+          error: _red,
+          onError: Colors.white,
+          surface: _bg,
+          surfaceContainerLowest: _bg,
+          surfaceContainerLow: _surface,
+          surfaceContainer: _surfaceAlt,
+          surfaceContainerHigh: _surfaceHigh,
+          surfaceContainerHighest: _surfaceHighest,
+          onSurface: _text,
+          onSurfaceVariant: _textMute,
+          outline: _textDim,
+          outlineVariant: _stroke,
         );
 
     final text = AppType.textTheme(scheme);
+    const sharp = RoundedRectangleBorder();
 
     return ThemeData(
       useMaterial3: true,
@@ -119,7 +108,7 @@ abstract final class AppTheme {
       fontFamily: AppType.body,
       textTheme: text,
       scaffoldBackgroundColor: scheme.surface,
-      splashFactory: InkSparkle.splashFactory,
+      splashFactory: InkRipple.splashFactory,
 
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
@@ -128,47 +117,51 @@ abstract final class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: false,
         titleTextStyle: text.headlineSmall,
-        systemOverlayStyle: isLight
-            ? SystemUiOverlayStyle.dark
-            : SystemUiOverlayStyle.light,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
       ),
 
       cardTheme: CardThemeData(
-        elevation: isLight ? 1 : 0,
-        shadowColor: const Color(0x1A1B2340),
+        elevation: 0,
         color: scheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+        shape: sharp.copyWith(
           side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
 
+      // Material's default disabled style is a low-alpha overlay meant for a
+      // mid-tone surface; against this system's near-black canvas it reads
+      // as nothing at all — a button a user cannot even tell is there to
+      // wait for. Disabled state gets its own real colours instead of an
+      // opacity trick, the same way every other state on a sharp-cornered
+      // hairline surface in this system does.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(54),
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          textStyle: text.labelLarge?.copyWith(fontSize: 15.5),
+          shape: sharp,
+          textStyle: text.labelLarge,
+          disabledBackgroundColor: scheme.surfaceContainer,
+          disabledForegroundColor: scheme.onSurfaceVariant,
         ),
       ),
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(50),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
+          shape: sharp,
           side: BorderSide(color: scheme.outlineVariant),
+          foregroundColor: scheme.onSurface,
           textStyle: text.labelLarge,
         ),
       ),
 
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(textStyle: text.labelLarge),
+        style: TextButton.styleFrom(
+          shape: sharp,
+          textStyle: text.labelLarge,
+        ),
       ),
 
       inputDecorationTheme: InputDecorationTheme(
@@ -176,15 +169,15 @@ abstract final class AppTheme {
         fillColor: scheme.surfaceContainer,
         hintStyle: text.bodyLarge?.copyWith(color: scheme.onSurfaceVariant),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.zero,
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.zero,
           borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.zero,
           borderSide: BorderSide(color: scheme.primary, width: 1.6),
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -198,30 +191,30 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         height: 68,
-        indicatorColor: scheme.primary.withValues(alpha: 0.14),
-        indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+        indicatorColor: Colors.transparent,
+        indicatorShape: const Border(
+          top: BorderSide(color: _lime, width: 2),
         ),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         labelTextStyle: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? text.labelSmall?.copyWith(
-                  color: scheme.primary,
-                  fontWeight: FontWeight.w700,
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w600,
                 )
               : text.labelSmall,
         ),
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
-            size: 23,
+            size: 22,
             color: states.contains(WidgetState.selected)
-                ? scheme.primary
+                ? scheme.onSurface
                 : scheme.onSurfaceVariant,
           ),
         ),
       ),
 
-      // Selected-state text colour (white on the solid accent fill) is set
+      // Selected-state text colour (near-black on the solid lime fill) is set
       // per chip, not here — `ChipThemeData` has no per-selection-state label
       // style, only a flat default.
       chipTheme: ChipThemeData(
@@ -229,7 +222,7 @@ abstract final class AppTheme {
         selectedColor: scheme.primary,
         side: BorderSide(color: scheme.outlineVariant),
         labelStyle: text.labelMedium!.copyWith(color: scheme.onSurface),
-        shape: const StadiumBorder(),
+        shape: sharp,
         showCheckmark: false,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       ),
@@ -242,15 +235,16 @@ abstract final class AppTheme {
 
       progressIndicatorTheme: ProgressIndicatorThemeData(
         linearTrackColor: scheme.surfaceContainerHigh,
-        linearMinHeight: 6,
+        linearMinHeight: 3,
         circularTrackColor: scheme.surfaceContainerHigh,
       ),
 
       sliderTheme: SliderThemeData(
-        trackHeight: 6,
+        trackHeight: 2,
         activeTrackColor: scheme.primary,
         inactiveTrackColor: scheme.surfaceContainerHigh,
         thumbColor: scheme.primary,
+        thumbShape: const RectangularSliderThumbShape(),
         overlayShape: SliderComponentShape.noOverlay,
       ),
 
@@ -259,17 +253,15 @@ abstract final class AppTheme {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         showDragHandle: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-        ),
+        dragHandleColor: scheme.outlineVariant,
+        shape: sharp,
       ),
 
       dialogTheme: DialogThemeData(
         backgroundColor: scheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24),
+        shape: sharp.copyWith(
           side: BorderSide(color: scheme.outlineVariant),
         ),
         titleTextStyle: text.titleLarge,
@@ -283,66 +275,93 @@ abstract final class AppTheme {
           color: scheme.onInverseSurface,
         ),
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: sharp,
       ),
 
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        elevation: 3,
-        focusElevation: 3,
-        hoverElevation: 4,
-        highlightElevation: 4,
-        backgroundColor: scheme.primary,
-        foregroundColor: Colors.white,
-        extendedTextStyle: text.labelLarge?.copyWith(color: Colors.white),
-        shape: const CircleBorder(),
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+        backgroundColor: scheme.secondary,
+        foregroundColor: scheme.onSecondary,
+        extendedTextStyle: text.labelLarge?.copyWith(color: scheme.onSecondary),
+        shape: sharp,
       ),
 
       listTileTheme: ListTileThemeData(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         titleTextStyle: text.titleSmall,
         subtitleTextStyle: text.bodySmall,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        shape: sharp,
       ),
 
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: SegmentedButton.styleFrom(
           side: BorderSide(color: scheme.outlineVariant),
           selectedBackgroundColor: scheme.primary,
-          selectedForegroundColor: Colors.white,
+          selectedForegroundColor: scheme.onPrimary,
           textStyle: text.labelLarge,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          shape: sharp,
         ),
       ),
     );
   }
 }
 
+/// A rectangular slider thumb — [SliderThemeData] has no built-in shape that
+/// isn't round, so this is the one unavoidable custom painter the zero-radius
+/// rule requires.
+class RectangularSliderThumbShape extends SliderComponentShape {
+  const RectangularSliderThumbShape({this.width = 4, this.height = 20});
+
+  final double width;
+  final double height;
+
+  @override
+  Size getPreferredSize(bool isEnabled, bool isDiscrete) => Size(width, height);
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset center, {
+    required Animation<double> activationAnimation,
+    required Animation<double> enableAnimation,
+    required bool isDiscrete,
+    required TextPainter labelPainter,
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required TextDirection textDirection,
+    required double value,
+    required double textScaleFactor,
+    required Size sizeWithOverflow,
+  }) {
+    final canvas = context.canvas;
+    final paint = Paint()..color = sliderTheme.thumbColor ?? Colors.white;
+    canvas.drawRect(
+      Rect.fromCenter(center: center, width: width, height: height),
+      paint,
+    );
+  }
+}
+
 /// Budget state colours, and the spacing scale.
 ///
-/// Held outside the seeded scheme because they mean something specific rather
-/// than being a decorative accent a future reseeding may change.
+/// Held outside the seeded scheme because they mean something specific
+/// rather than being a decorative accent a future reseeding may change. The
+/// getter names are unchanged from the previous design system on purpose —
+/// every call site across the app keeps working; only the hex values moved.
 extension AppColors on ColorScheme {
-  Color get healthy => brightness == Brightness.light
-      ? const Color(0xFF3A9D68)
-      : const Color(0xFF5FD891);
+  Color get healthy => AppTheme._lime;
+  Color get warning => AppTheme._amber;
+  Color get exceeded => AppTheme._red;
 
-  Color get warning => brightness == Brightness.light
-      ? const Color(0xFFC97F1E)
-      : const Color(0xFFE8A33D);
-
-  Color get exceeded => brightness == Brightness.light
-      ? const Color(0xFFD64545)
-      : const Color(0xFFF37272);
-
-  /// The assistant surface. Distinct from [primary] and from every status
-  /// colour, so guidance never reads as a call to action or a budget-state
-  /// verdict the user must obey.
-  Color get advisory => brightness == Brightness.light
-      ? const Color(0xFF4C5FA8)
-      : const Color(0xFFAAB4E6);
+  /// The assistant surface. Distinct from [primary] (budget-state lime) and
+  /// from every status colour, so guidance never reads as a call to action
+  /// or a budget-state verdict the user must obey. Doubles as this system's
+  /// "the one action" violet.
+  Color get advisory => AppTheme._violet;
 
   Color statusColor(CategoryStatus status) => switch (status) {
     CategoryStatus.healthy => healthy,

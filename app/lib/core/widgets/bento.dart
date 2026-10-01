@@ -44,12 +44,13 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-/// A monochrome icon on a tinted circular background.
+/// A monochrome icon on a flat square tile with a hairline border.
 ///
 /// The one "icon as decoration" the design system allows — a single glyph in
 /// a single tone, never a multi-colour emoji. Used for category, stat, and
 /// insight markers so the same visual language covers all three instead of
-/// each screen inventing its own treatment.
+/// each screen inventing its own treatment. Square, not circular — Obsidian
+/// has no curves anywhere, this included.
 class IconBadge extends StatelessWidget {
   const IconBadge({
     required this.icon,
@@ -67,15 +68,18 @@ class IconBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final color = tone ?? scheme.onSurfaceVariant;
+    // A thin glyph needs more contrast than a line of text to read at the
+    // same perceived legibility, so this defaults all the way to onSurface
+    // rather than the dimmer onSurfaceVariant most captions use.
+    final color = tone ?? scheme.onSurface;
 
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHigh,
-        shape: BoxShape.circle,
+        color: scheme.surfaceContainer,
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Icon(icon, size: iconSize, color: color),
     );
@@ -104,21 +108,18 @@ class FlatBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final reduceMotion = AppMotion.reduceMotion(context);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(height),
-      child: SizedBox(
-        height: height,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(end: value.clamp(0.0, 1.0)),
-          duration: reduceMotion
-              ? Duration.zero
-              : const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
-          builder: (context, animated, _) => LinearProgressIndicator(
-            value: animated,
-            backgroundColor: scheme.surfaceContainerHigh,
-            valueColor: AlwaysStoppedAnimation(color),
-          ),
+    return SizedBox(
+      height: height,
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(end: value.clamp(0.0, 1.0)),
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        builder: (context, animated, _) => LinearProgressIndicator(
+          value: animated,
+          backgroundColor: scheme.surfaceContainerHigh,
+          valueColor: AlwaysStoppedAnimation(color),
         ),
       ),
     );
@@ -178,7 +179,7 @@ class MiniStatCard extends StatelessWidget {
 
     return Container(
       padding: padding,
-      decoration: AppTheme.card(scheme, radius: 16),
+      decoration: AppTheme.card(scheme),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -197,7 +198,7 @@ class MiniStatCard extends StatelessWidget {
               value,
               style: theme.textTheme.titleMedium?.money.copyWith(
                 fontFamily: AppType.display,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
                 color: tone ?? scheme.onSurface,
               ),
             ),
@@ -243,7 +244,11 @@ class ListSection extends StatelessWidget {
   }
 }
 
-/// A small pill. Used for streaks and status, never for actions.
+/// A small state indicator: a coloured left-edge strip inside a hairline
+/// box, not a filled pill. State is a 3px bar, the same device a ledger row
+/// uses — one language for "this means something" everywhere in the app,
+/// rather than a pill here and a strip there. Used for streaks and status,
+/// never for actions.
 class TonePill extends StatelessWidget {
   const TonePill({
     required this.label,
@@ -259,15 +264,21 @@ class TonePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: scheme.outlineVariant),
       ),
+      padding: const EdgeInsets.only(right: 10, top: 5, bottom: 5),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          Container(
+            width: 3,
+            height: 14,
+            color: tone,
+            margin: const EdgeInsets.only(right: 8),
+          ),
           if (icon != null) ...[
             Icon(icon, size: 13, color: tone),
             const SizedBox(width: 5),
@@ -275,7 +286,7 @@ class TonePill extends StatelessWidget {
           Text(
             label,
             style: theme.textTheme.labelSmall?.copyWith(
-              color: tone,
+              color: scheme.onSurface,
               fontWeight: FontWeight.w600,
             ),
           ),

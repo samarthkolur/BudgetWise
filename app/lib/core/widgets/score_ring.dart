@@ -125,7 +125,7 @@ class _RingPainter extends CustomPainter {
     final base = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round
+      ..strokeCap = StrokeCap.square
       ..color = track;
 
     // Starts at the top and sweeps clockwise — the direction people read a
