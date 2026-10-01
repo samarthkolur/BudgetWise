@@ -131,11 +131,13 @@ class _RoundIconButton extends StatelessWidget {
       icon: Icon(icon),
       onPressed: onPressed,
       style: IconButton.styleFrom(
-        backgroundColor: scheme.surfaceContainerHigh,
+        backgroundColor: scheme.surfaceContainer,
         foregroundColor: onPressed == null
             ? scheme.onSurfaceVariant.withValues(alpha: 0.4)
             : scheme.onSurface,
-        shape: const CircleBorder(),
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: scheme.outlineVariant),
+        ),
       ),
     );
   }
@@ -228,7 +230,7 @@ class _LedgerBody extends ConsumerWidget {
                   onTap: () => _runExport(context, ref, summary, format),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: AppTheme.card(scheme, radius: 12),
+                    decoration: AppTheme.card(scheme),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -263,7 +265,7 @@ class _LedgerBody extends ConsumerWidget {
             OutlinedButton.icon(
               onPressed: () => context.push(Routes.insights),
               style: OutlinedButton.styleFrom(
-                shape: const StadiumBorder(),
+                shape: const RoundedRectangleBorder(),
                 minimumSize: const Size(0, 36),
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 visualDensity: VisualDensity.compact,
