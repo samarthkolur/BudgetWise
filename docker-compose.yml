@@ -1,26 +1,29 @@
-# Local MongoDB. Nothing else is needed to run BudgetWise end to end.
+# Local PostgreSQL. Nothing else is needed to run BudgetWise end to end.
 #
 #   docker compose up -d
 #
-# No authentication is configured, and that is deliberate: the port is bound to
-# loopback only, so nothing off this machine can reach it. Adding a password
-# here would be security theatre — the credential would live in this file, in
-# git, next to the thing it protects.
+# No authentication beyond the password in this file is configured, and that
+# is deliberate: the port is bound to loopback only, so nothing off this
+# machine can reach it. A stronger credential here would live in this file,
+# in git, next to the thing it protects — security theatre.
 services:
-  mongo:
-    image: mongo:7
-    container_name: budgetwise_mongo
+  postgres:
+    image: postgres:16
+    container_name: budgetwise_postgres
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: budgetwise
     ports:
-      - "127.0.0.1:27017:27017"
+      - "127.0.0.1:5432:5432"
     volumes:
-      - mongo_data:/data/db
-    command: ["--wiredTigerCacheSizeGB", "0.5"]
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ping:1}).ok"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 10
 
 volumes:
-  mongo_data:
+  postgres_data:

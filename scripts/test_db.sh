@@ -1,20 +1,22 @@
 #!/usr/bin/env bash
 #
-# Runs the server suites against a throwaway MongoDB.
+# Runs the shared domain suite and the Node server suite against a throwaway
+# PostgreSQL.
 #
-# The RLS suite this replaced ran against Postgres and was a second opinion on
-# what the database already enforced. These suites carry more weight: MongoDB
-# enforces no ownership rules at all, so cross-user separation is exactly as good
-# as the assertions in server/test/isolation_test.dart and nothing more.
+# The isolation suite carries more weight than a typical integration test:
+# Postgres foreign keys stop an orphaned parent id, but nothing in the schema
+# stops "this id is real but belongs to someone else" — cross-user separation
+# is exactly as good as the assertions in server/test/isolation.test.ts and
+# nothing more.
 #
-#   ./scripts/test_db.sh                    spin up a container, test, tear down
-#   MONGO_TEST_URI=... ./scripts/test_db.sh use an existing MongoDB
+#   ./scripts/test_db.sh                       spin up a container, test, tear down
+#   DATABASE_TEST_URL=... ./scripts/test_db.sh  use an existing PostgreSQL
 #
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-CONTAINER="budgetwise_test_mongo"
-PORT="${TEST_MONGO_PORT:-27018}"
+CONTAINER="budgetwise_test_postgres"
+PORT="${TEST_POSTGRES_PORT:-5433}"
 OWNS_CONTAINER=0
 
 red()   { printf '\033[31m%s\033[0m\n' "$*"; }
@@ -28,36 +30,40 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ -z "${MONGO_TEST_URI:-}" ]]; then
-  command -v docker >/dev/null || { red "docker not found and MONGO_TEST_URI not set"; exit 1; }
+if [[ -z "${DATABASE_TEST_URL:-}" ]]; then
+  command -v docker >/dev/null || { red "docker not found and DATABASE_TEST_URL not set"; exit 1; }
 
-  blue "==> starting throwaway mongodb on :$PORT"
+  blue "==> starting throwaway postgres on :$PORT"
   docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
-  # tmpfs for the data directory: the suite creates and drops databases quickly,
-  # and on a disk-backed volume that was enough to make WiredTiger abort with a
-  # fatal assertion during index creation.
   docker run -d --name "$CONTAINER" \
-    -p "$PORT:27017" \
-    --tmpfs /data/db:rw,size=1g \
-    mongo:7 --wiredTigerCacheSizeGB 0.25 >/dev/null
+    -p "127.0.0.1:$PORT:5432" \
+    -e POSTGRES_PASSWORD=postgres \
+    -e POSTGRES_DB=budgetwise_test \
+    postgres:16 >/dev/null
   OWNS_CONTAINER=1
 
-  export MONGO_TEST_URI="mongodb://localhost:$PORT"
+  export DATABASE_TEST_URL="postgresql://postgres:postgres@localhost:$PORT/budgetwise_test"
 
   for _ in $(seq 1 60); do
-    if docker exec "$CONTAINER" mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1; then
+    if docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1; then
       break
     fi
-    sleep 2
+    sleep 1
   done
-  docker exec "$CONTAINER" mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 \
-    || { red "mongodb never became ready"; exit 1; }
+  docker exec "$CONTAINER" pg_isready -U postgres >/dev/null 2>&1 \
+    || { red "postgres never became ready"; exit 1; }
 fi
 
 blue "==> shared domain suite"
-(cd "$ROOT/packages/budgetwise_domain" && dart pub get >/dev/null && dart test)
+(cd "$ROOT/packages/budgetwise_domain" && dart test)
 
-blue "==> server suites (isolation + behaviour)"
-(cd "$ROOT/server" && dart pub get >/dev/null && dart test)
+blue "==> server dependencies"
+(cd "$ROOT/server" && npm install --no-audit --no-fund >/dev/null)
+
+blue "==> applying schema"
+(cd "$ROOT/server" && DATABASE_URL="$DATABASE_TEST_URL" npx prisma migrate deploy)
+
+blue "==> server suite (auth + isolation)"
+(cd "$ROOT/server" && DATABASE_TEST_URL="$DATABASE_TEST_URL" npm test)
 
 green "==> all database assertions passed"

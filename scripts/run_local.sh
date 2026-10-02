@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Starts MongoDB and the API with no cloud service of any kind.
+# Starts PostgreSQL and the Node API with no cloud service of any kind.
 #
 #   ./scripts/run_local.sh
 #
@@ -22,19 +22,28 @@ if [[ ! -f server/.env ]]; then
   green "    generated a signing secret"
 fi
 
-blue "==> starting mongodb"
-docker compose up -d >/dev/null
+blue "==> starting postgres"
+docker compose up -d postgres >/dev/null
 for _ in $(seq 1 60); do
-  if docker compose exec -T mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1; then
+  if docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1; then
     break
   fi
   sleep 2
 done
-docker compose exec -T mongo mongosh --quiet --eval 'db.runCommand({ping:1}).ok' >/dev/null 2>&1 \
-  || { red "mongodb never became ready"; exit 1; }
-green "    mongodb ready on 127.0.0.1:27017"
+docker compose exec -T postgres pg_isready -U postgres >/dev/null 2>&1 \
+  || { red "postgres never became ready"; exit 1; }
+green "    postgres ready on 127.0.0.1:5432"
+
+blue "==> installing server dependencies"
+cd server
+if [[ ! -d node_modules ]]; then
+  npm install
+fi
+
+set -a; . ./.env; set +a
+
+blue "==> applying migrations"
+npx prisma migrate deploy
 
 blue "==> starting the API"
-cd server
-set -a; . ./.env; set +a
-exec dart run bin/server.dart
+exec npx ts-node src/index.ts
