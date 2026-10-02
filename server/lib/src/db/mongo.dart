@@ -6,7 +6,6 @@ import 'package:mongo_dart/mongo_dart.dart';
 abstract final class Col {
   static const users = 'users';
   static const budgets = 'budgets';
-  static const categories = 'categories';
   static const expenses = 'expenses';
   static const savings = 'savings_entries';
   static const goals = 'goals';
@@ -18,7 +17,6 @@ abstract final class Col {
   static const List<String> all = [
     users,
     budgets,
-    categories,
     expenses,
     savings,
     goals,
@@ -70,18 +68,9 @@ class Mongo {
       unique: true,
     );
 
-    // One row per category per budget.
-    await db.createIndex(
-      Col.categories,
-      keys: {'budgetId': 1, 'categoryKey': 1},
-      unique: true,
-    );
-    await db.createIndex(Col.categories, keys: {'ownerId': 1, 'budgetId': 1});
-
     // Every read of a user's data starts with ownerId, so it leads every index.
     await db.createIndex(Col.expenses, keys: {'ownerId': 1, 'spentOn': -1});
     await db.createIndex(Col.expenses, keys: {'ownerId': 1, 'budgetId': 1});
-    await db.createIndex(Col.expenses, keys: {'ownerId': 1, 'categoryId': 1});
 
     await db.createIndex(Col.savings, keys: {'ownerId': 1, 'budgetId': 1});
     await db.createIndex(Col.goals, keys: {'ownerId': 1, 'status': 1});

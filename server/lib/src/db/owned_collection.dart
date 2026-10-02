@@ -151,10 +151,10 @@ class OwnedCollection {
   /// Confirms the owner actually owns [id], for cross-collection writes.
   ///
   /// This is the composite-foreign-key check, done by hand. Adding an expense
-  /// requires both a budget and a category; without this, a caller could pass
-  /// another user's budgetId and — because their own `ownerId` is stamped on the
-  /// new row — create a document that looks perfectly legitimate while pointing
-  /// into someone else's month.
+  /// requires a budget; without this, a caller could pass another user's
+  /// budgetId and — because their own `ownerId` is stamped on the new row —
+  /// create a document that looks perfectly legitimate while pointing into
+  /// someone else's month.
   Future<bool> owns(ObjectId id) async => await findById(id) != null;
 }
 

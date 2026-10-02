@@ -66,10 +66,13 @@ class InvestingRepository {
 
     final history = await _history();
     final totalSaved = Money(await _savings.sum('amountMinor'));
+    // Total spend stands in for "essentials" now that there are no
+    // categories to isolate essentials from the rest — see
+    // ExpenseRepository.averageMonthlySpend.
     final essentials = await ExpenseRepository(
       _mongo,
       ownerId,
-    ).averageMonthlyEssentials();
+    ).averageMonthlySpend();
 
     final status = evaluateInvestingUnlock(
       history: history,
