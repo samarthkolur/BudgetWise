@@ -112,4 +112,12 @@ regexes = [
 
   # The test fixtures' UUIDs.
   '''[0-9]{8}-[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{12}''',
+
+  # The CI-only JWT_SECRET placeholder in .github/workflows/ci.yaml. The
+  # server refuses to start below 32 characters (non-negotiable rule 4), so
+  # the throwaway Postgres job needs *some* 32+ char value — this exact
+  # string, not a real secret. Allowlisted by exact value, same reasoning as
+  # the fake Atlas URI above: a real secret pasted in its place would still
+  # be caught.
+  '''ci-test-secret-at-least-32-characters-long''',
 ]
