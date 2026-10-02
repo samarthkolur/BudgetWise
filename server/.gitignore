@@ -3,3 +3,10 @@
 build/
 pubspec.lock
 .env
+
+# Node / TypeScript / Prisma (server/src) — the new server replacing the
+# Dart one above.
+node_modules/
+dist/
+prisma/generated/
+coverage/

@@ -102,22 +102,31 @@ if [[ -n "$BAD_ENV" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# 6. The server and the shared domain package analyze too.
+# 6. The shared domain package analyzes, and the server type-checks.
 #
-#    There are no migrations to keep immutable any more — MongoDB has no schema
-#    to migrate. What replaced that rule is this: the server is where every
+#    The server moved to Node/TypeScript/Prisma — there is no `dart analyze`
+#    for it any more, but "does it type-check" is the equivalent gate, and the
+#    reason it still matters is unchanged: the server is where every
 #    ownership check now lives, so it must not be the package nobody checks.
 # ---------------------------------------------------------------------------
-if git diff --cached --name-only | grep -qE '^(server|packages)/'; then
-  for pkg in packages/budgetwise_domain server; do
-    if (cd "$ROOT/$pkg" && dart analyze --fatal-infos >/tmp/bw_dart_analyze.log 2>&1); then
-      green "analyze ($pkg)"
-    else
-      red "analyze ($pkg)"
-      grep -E '^\s+(error|warning|info)' /tmp/bw_dart_analyze.log | head -15
-      FAILED=1
-    fi
-  done
+if git diff --cached --name-only | grep -qE '^packages/'; then
+  if (cd "$ROOT/packages/budgetwise_domain" && dart analyze --fatal-infos >/tmp/bw_dart_analyze.log 2>&1); then
+    green "analyze (packages/budgetwise_domain)"
+  else
+    red "analyze (packages/budgetwise_domain)"
+    grep -E '^\s+(error|warning|info)' /tmp/bw_dart_analyze.log | head -15
+    FAILED=1
+  fi
+fi
+
+if git diff --cached --name-only | grep -qE '^server/(src|test)/'; then
+  if (cd "$ROOT/server" && npx tsc --noEmit >/tmp/bw_tsc.log 2>&1); then
+    green "type-check (server)"
+  else
+    red "type-check (server)"
+    head -20 /tmp/bw_tsc.log
+    FAILED=1
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -129,7 +138,7 @@ fi
 #    that was doing its job. A gate that cries wolf is a gate people route
 #    around. The three markers left all denote actual unfinished code.
 # ---------------------------------------------------------------------------
-mapfile -t LIB_FILES < <(staged 'app/lib/*' || true)
+mapfile -t LIB_FILES < <(staged 'app/lib/*' 'server/src/*' || true)
 if [[ ${#LIB_FILES[@]} -gt 0 ]]; then
   HITS=""
   for f in "${LIB_FILES[@]}"; do

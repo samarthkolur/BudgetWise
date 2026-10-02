@@ -17,6 +17,7 @@ env:
   # Pinned to match the floor in app/pubspec.yaml. Raise both together, never
   # one alone — several dependencies are held back for exactly this reason.
   FLUTTER_VERSION: "3.35.6"
+  NODE_VERSION: "20"
 
 jobs:
   domain:
@@ -43,26 +44,36 @@ jobs:
       run:
         working-directory: server
     services:
-      mongo:
-        image: mongo:7
-        ports: ["27018:27017"]
+      postgres:
+        image: postgres:16
+        ports: ["5433:5432"]
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: budgetwise_test
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.runCommand({ping:1}).ok'"
+          --health-cmd pg_isready
           --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5433/budgetwise_test
+      JWT_SECRET: ci-test-secret-at-least-32-characters-long
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
-      - run: dart pub get
-      - run: dart format --set-exit-if-changed --output=none .
-      - run: dart analyze --fatal-infos
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx prisma migrate deploy
+      - run: npm run build
 
-      # The isolation suite is the one that matters. MongoDB enforces no
-      # ownership rules, so cross-user separation is exactly as good as these
-      # assertions and nothing more.
-      - name: Tests (isolation + behaviour)
-        run: dart test
-        env:
-          MONGO_TEST_URI: mongodb://localhost:27018
+      # The isolation suite is the one that matters. Postgres foreign keys
+      # stop an orphaned reference, but not "this id is real but belongs to
+      # someone else" — cross-user separation is exactly as good as these
+      # assertions and the assertOwnsX checks they exercise.
+      - name: Tests (auth + isolation)
+        run: npm test
 
   app:
     name: App
@@ -128,7 +139,7 @@ jobs:
 
       - name: No placeholders in app code
         run: |
-          if grep -rnE '(TODO: implement|FIXME|throw UnimplementedError)' app/lib server/lib; then
+          if grep -rnE '(TODO: implement|FIXME|throw UnimplementedError)' app/lib server/src; then
             echo "::error::placeholder found in shipped code"
             exit 1
           fi
@@ -157,9 +168,7 @@ jobs:
           mkdir -p config
           cat > config/ci.json <<'JSON'
           {
-            "API_BASE_URL": "http://ci-placeholder.invalid",
-            "GOOGLE_WEB_CLIENT_ID": "ci-placeholder.apps.googleusercontent.com",
-            "GOOGLE_IOS_CLIENT_ID": "ci-placeholder.apps.googleusercontent.com"
+            "API_BASE_URL": "http://ci-placeholder.invalid"
           }
           JSON
           flutter pub get
