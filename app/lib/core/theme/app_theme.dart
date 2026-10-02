@@ -1,5 +1,4 @@
 import 'package:budgetwise/core/theme/app_typography.dart';
-import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -33,7 +32,12 @@ abstract final class AppTheme {
   static const _surfaceAlt = Color(0xFF1B1B1B);
   static const _surfaceHigh = Color(0xFF232323);
   static const _surfaceHighest = Color(0xFF2E2E2E);
-  static const _stroke = Color(0xFF2B2B2B);
+  // Bright enough to read as a deliberate outline against the near-black
+  // surfaces it separates, not just a slightly-different shade of almost
+  // nothing — the complaint was real: at #2B2B2B this was barely visible
+  // against #0A0A0A/#141414, so every card, sheet and divider blended into
+  // whatever was behind it instead of standing apart from it.
+  static const _stroke = Color(0xFF47473F);
   static const _text = Color(0xFFF5F5F2);
   static const _textDim = Color(0xFFC9C9C4);
   static const _textMute = Color(0xFFA3A39D);
@@ -249,7 +253,10 @@ abstract final class AppTheme {
       ),
 
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: scheme.surfaceContainerLowest,
+        // One step up from the canvas, not the same colour as it — a sheet
+        // that matches the page behind it has no visible edge to separate
+        // the two, which is exactly what was happening here.
+        backgroundColor: scheme.surfaceContainerLow,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         showDragHandle: true,
@@ -362,12 +369,6 @@ extension AppColors on ColorScheme {
   /// or a budget-state verdict the user must obey. Doubles as this system's
   /// "the one action" violet.
   Color get advisory => AppTheme._violet;
-
-  Color statusColor(CategoryStatus status) => switch (status) {
-    CategoryStatus.healthy => healthy,
-    CategoryStatus.warning => warning,
-    CategoryStatus.exceeded => exceeded,
-  };
 
   /// A 12%-alpha wash of any colour, for tinted tiles that stay flat.
   Color tint(Color color) => color.withValues(alpha: 0.12);

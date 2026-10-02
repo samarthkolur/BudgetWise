@@ -71,15 +71,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   /// Fills in a sensible default for anything still unset, then submits
   /// immediately — the prototype's own skip does the same thing
   /// (`income: Number(s.incomeInput) || 45000`), landing straight on the
-  /// dashboard rather than stepping through the rest of the wizard.
-  /// Savings percent and the category split already default to sensible
-  /// values from the moment onboarding starts, so income is the only real
-  /// gap. `resetToDefaults` is defensive, not load-bearing, now that nothing
-  /// in this flow lets the split go unbalanced in the first place.
+  /// dashboard rather than stepping through the rest of the wizard. Savings
+  /// percent already defaults to a sensible value from the moment onboarding
+  /// starts, so income is the only real gap.
   Future<void> _skip() async {
     final controller = ref.read(onboardingControllerProvider.notifier);
     final state = ref.read(onboardingControllerProvider);
-    if (!state.isBalanced) controller.resetToDefaults();
     if (!state.income.isPositive) {
       controller.setIncome(Money.fromRupees(45000));
     }
@@ -609,6 +606,8 @@ class _SavingsStep extends ConsumerWidget {
     final state = ref.watch(onboardingControllerProvider);
     final controller = ref.read(onboardingControllerProvider.notifier);
     final theme = Theme.of(context);
+    final previous = ref.watch(allBudgetsProvider).value;
+    final hasPrevious = previous != null && previous.isNotEmpty;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -634,6 +633,21 @@ class _SavingsStep extends ConsumerWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (hasPrevious) ...[
+                    Gap.h16,
+                    // A returning account setting up a new month — distinct
+                    // from a brand-new account, which has no previous budget
+                    // to offer here — gets its last split back with one tap
+                    // instead of re-entering it from scratch.
+                    ActionChip(
+                      label: Text(
+                        'Use last month’s split '
+                        '(${previous.first.savingsMode == SavingsMode.percent ? '${previous.first.savingsPercent?.toStringAsFixed(0) ?? ''}%' : previous.first.savingsTarget.formatCompact()})',
+                      ),
+                      avatar: const Icon(Icons.history, size: 16),
+                      onPressed: () => controller.adoptPrevious(previous.first),
+                    ),
+                  ],
                   Gap.h20,
                   SegmentedButton<SavingsMode>(
                     segments: const [

@@ -54,123 +54,89 @@ class _AlertsBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider(summary.budgetId));
     final unlock = ref.watch(investingStatusProvider);
 
-    return AsyncView(
-      value: categories,
-      onRetry: () => ref.invalidate(categoriesProvider),
-      builder: (list) {
-        // The rule-based insights already cover a "savings pending" note, but
-        // only in the last week of the month — Alerts shows it for as long as
-        // it's actually true, the same window SavingsReminderCard uses, so
-        // it's built here instead and the generated one is dropped to avoid
-        // showing the same fact twice.
-        final items = generateInsights(summary: summary, categories: list)
-            .where(
-              (i) =>
-                  i.kind != 'savings_pending' && i.kind != 'savings_complete',
-            )
-            .toList();
+    // The rule-based insights already cover a "savings pending" note, but
+    // only in the last week of the month — Alerts shows it for as long as
+    // it's actually true, the same window SavingsReminderCard uses, so
+    // it's built here instead and the generated one is dropped to avoid
+    // showing the same fact twice.
+    final items = generateInsights(summary: summary)
+        .where(
+          (i) => i.kind != 'savings_pending' && i.kind != 'savings_complete',
+        )
+        .toList();
 
-        if (!summary.savingsTarget.isZero) {
-          items.insert(
-            0,
-            summary.isSavingsConfirmed || summary.savingsOutstanding.isZero
-                ? Insight(
-                    kind: 'savings_confirmed',
-                    tone: InsightTone.celebration,
-                    title: 'Savings locked in',
-                    body:
-                        '${summary.savedActual.formatCompact()} saved this month.',
-                  )
-                : Insight(
-                    kind: 'savings_reminder',
-                    tone: InsightTone.warning,
-                    title: 'Savings still pending',
-                    body:
-                        'Move ${summary.savingsOutstanding.formatCompact()} to '
-                        'your savings account, then confirm it on Home.',
-                  ),
-          );
-        }
-
-        final claim = unlock.value;
-        if (claim != null) {
-          items.add(
-            claim.isUnlocked
-                ? const Insight(
-                    kind: 'investing_unlocked',
-                    tone: InsightTone.celebration,
-                    title: 'Investing is unlocked',
-                    body:
-                        'You built the habit first. Investing features are '
-                        'available from here on.',
-                  )
-                : Insight(
-                    kind: 'streak_progress',
-                    tone: InsightTone.info,
-                    title: '${claim.streakMonths} of 6 months saved',
-                    body: claim.monthsRemaining > 0
-                        ? '${claim.monthsRemaining} more consistent month'
-                              '${claim.monthsRemaining == 1 ? "" : "s"} unlocks investing.'
-                        : 'Keep the streak going to unlock investing.',
-                  ),
-          );
-        }
-
-        // Reallocation suggestions — the Home category grid is too compact
-        // for this text, so it surfaces here instead. Same domain call the
-        // old row layout used, just a different presentation.
-        final byKey = {for (final c in list) c.key: c.progress};
-        final names = {for (final c in list) c.key: c.name};
-        for (final category in list) {
-          if (!category.progress.isExceeded) continue;
-          final suggestion = suggestReallocation(
-            overspend: category.progress.overspend,
-            categories: byKey,
-            excludingKey: category.key,
-          );
-          if (suggestion == null) continue;
-          final sourceName = names[suggestion.fromKey] ?? suggestion.fromKey;
-          items.add(
-            Insight(
-              kind: 'reallocation_suggestion',
-              tone: InsightTone.info,
-              title: 'Move money into ${category.name}?',
-              body:
-                  '$sourceName has ${suggestion.availableAtSource.formatCompact()} '
-                  'spare — you could move ${suggestion.amount.formatCompact()} across.',
-            ),
-          );
-        }
-
-        if (items.isEmpty) {
-          return const EmptyView(
-            icon: Icons.notifications_none_rounded,
-            title: 'Nothing needs your attention',
-            message: 'Alerts show up here as they become relevant.',
-          );
-        }
-
-        final scheme = Theme.of(context).colorScheme;
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.xxl),
-          children: [
-            const AdvisorHeader(subtitle: 'Based on your budget rules'),
-            Gap.h16,
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
-              decoration: AppTheme.card(scheme),
-              child: ListSection(
-                children: [
-                  for (final item in items) AdvisorCard(insight: item),
-                ],
+    if (!summary.savingsTarget.isZero) {
+      items.insert(
+        0,
+        summary.isSavingsConfirmed || summary.savingsOutstanding.isZero
+            ? Insight(
+                kind: 'savings_confirmed',
+                tone: InsightTone.celebration,
+                title: 'Savings locked in',
+                body:
+                    '${summary.savedActual.formatCompact()} saved this month.',
+              )
+            : Insight(
+                kind: 'savings_reminder',
+                tone: InsightTone.warning,
+                title: 'Savings still pending',
+                body:
+                    'Move ${summary.savingsOutstanding.formatCompact()} to '
+                    'your savings account, then confirm it on Home.',
               ),
-            ),
-          ],
-        );
-      },
+      );
+    }
+
+    final claim = unlock.value;
+    if (claim != null) {
+      items.add(
+        claim.isUnlocked
+            ? const Insight(
+                kind: 'investing_unlocked',
+                tone: InsightTone.celebration,
+                title: 'Investing is unlocked',
+                body:
+                    'You built the habit first. Investing features are '
+                    'available from here on.',
+              )
+            : Insight(
+                kind: 'streak_progress',
+                tone: InsightTone.info,
+                title: '${claim.streakMonths} of 6 months saved',
+                body: claim.monthsRemaining > 0
+                    ? '${claim.monthsRemaining} more consistent month'
+                          '${claim.monthsRemaining == 1 ? "" : "s"} unlocks investing.'
+                    : 'Keep the streak going to unlock investing.',
+              ),
+      );
+    }
+
+    if (items.isEmpty) {
+      return const EmptyView(
+        icon: Icons.notifications_none_rounded,
+        title: 'Nothing needs your attention',
+        message: 'Alerts show up here as they become relevant.',
+      );
+    }
+
+    final scheme = Theme.of(context).colorScheme;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.sm, Gap.lg, Gap.xxl),
+      children: [
+        const AdvisorHeader(subtitle: 'Based on your budget rules'),
+        Gap.h16,
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
+          decoration: AppTheme.card(scheme),
+          child: ListSection(
+            children: [
+              for (final item in items) AdvisorCard(insight: item),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

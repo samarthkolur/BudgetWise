@@ -26,12 +26,10 @@ void main() {
       savingsTarget: const Money(1000000),
       // Savings not confirmed — the "still pending" alert should appear.
       savedActual: const Money.zero(),
-      allocated: const Money(4000000),
       spent: const Money(1500000),
       spendable: const Money(4000000),
       remaining: const Money(2500000),
       investedActual: const Money.zero(),
-      categoryCount: 1,
       expenseCount: 0,
       daysWithExpenses: 0,
       savingsConfirmedAt: null,
@@ -43,7 +41,6 @@ void main() {
         budgetRepository: FakeBudgetRepository(
           budget: budget,
           summary: summary,
-          categories: const [],
         ),
       ),
     );
