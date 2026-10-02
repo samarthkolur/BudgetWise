@@ -1,20 +1,16 @@
-import 'package:budgetwise/core/env/env.dart';
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
+import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// One button, because Google is the only provider.
+/// Email + password, sign up or log in.
 ///
-/// There is no password field, no "forgot password", no email verification and
-/// no account-recovery path — the whole surface simply does not exist. That is
-/// the point of choosing a single federated provider, and it is enforced in the
-/// API, which accepts Google ID tokens and nothing else — not by hiding UI here.
-///
-/// Reached from Settings, not a gate the app forces on launch — the app works
-/// fully offline, so signing in is something a user opts into, not a
-/// prerequisite. See [BudgetRefresh] and `profileRepositoryProvider` for how
-/// the app switches from local to server-backed data once this succeeds.
+/// This is now the **mandatory first screen** — see the router's redirect in
+/// `core/router/app_router.dart`, which sends anyone with no session here
+/// before anything else renders, with no way to dismiss it. There is no
+/// "optional" or "continue offline" path left: without an account there is
+/// nowhere else in the app to go.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
 
@@ -23,24 +19,61 @@ class SignInScreen extends ConsumerStatefulWidget {
 }
 
 class _SignInScreenState extends ConsumerState<SignInScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailField = TextEditingController();
+  final _passwordField = TextEditingController();
+  final _nameField = TextEditingController();
+
+  bool _isSignUp = false;
+  bool _obscurePassword = true;
   bool _busy = false;
 
-  Future<void> _signIn({bool local = false}) async {
+  @override
+  void dispose() {
+    _emailField.dispose();
+    _passwordField.dispose();
+    _nameField.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
     setState(() => _busy = true);
     try {
-      final service = ref.read(googleAuthServiceProvider);
-      if (local) {
-        await service.signInLocally();
+      final service = ref.read(authServiceProvider);
+      if (_isSignUp) {
+        await service.signUp(
+          email: _emailField.text,
+          password: _passwordField.text,
+          displayName: _nameField.text,
+        );
       } else {
-        await service.signIn();
+        await service.logIn(
+          email: _emailField.text,
+          password: _passwordField.text,
+        );
       }
       await ref.read(sessionProvider.notifier).refreshFromStorage();
+      // Pulls this account's server data into the local database once, so
+      // offline reads have something real from the very first sign-in rather
+      // than staying empty until a write happens to touch each table. Best
+      // effort: a brand-new signup has nothing to pull yet, and a failure
+      // here (e.g. signing up while briefly offline) must not block sign-in
+      // itself — the dashboard/onboarding redirect below still works from
+      // whatever's already local, and ordinary use repopulates it.
+      try {
+        await ref.read(hydrationServiceProvider).hydrate();
+      } on Object {
+        // Non-fatal — see above.
+      }
       // Every provider that depended on "signed in or not" now needs to
-      // re-resolve against the server instead of the local database.
+      // re-resolve against the server instead of the local database — and
+      // the router's redirect (now watching sessionProvider) moves the user
+      // on its own; this screen never navigates imperatively.
       ref
         ..refreshBudgetData()
         ..invalidate(profileProvider);
-      if (mounted) Navigator.of(context).pop();
     } on Object catch (error) {
       if (mounted) showFailure(context, error);
     } finally {
@@ -54,80 +87,107 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            children: [
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'BudgetWise',
-                        style: theme.textTheme.displayMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'EARN · SAVE · INVEST · SPEND',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.4,
-                        ),
-                      ),
-                      const SizedBox(height: 22),
-                      Text(
-                        'Decide where every rupee goes before you spend it — '
-                        'not after.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 32),
+                Text(
+                  'BudgetWise',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.displayMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-              ),
-              const SizedBox(height: 40),
-              if (!Env.devLogin)
-                _GoogleButton(busy: _busy, onPressed: _busy ? null : _signIn),
-              if (Env.devLogin) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _signIn(local: true),
-                  icon: _busy
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2.4),
-                        )
-                      : const Icon(Icons.dns_outlined, size: 18),
-                  label: const Text('Sign in to local dev server'),
-                ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 14),
                 Text(
-                  'DEV BUILD · NEEDS A LOCAL SERVER RUNNING',
+                  'EARN · SAVE · INVEST · SPEND',
                   textAlign: TextAlign.center,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.primary,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
+                    letterSpacing: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                Text(
+                  _isSignUp ? 'Create your account' : 'Welcome back',
+                  style: theme.textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 20),
+                if (_isSignUp) ...[
+                  TextFormField(
+                    controller: _nameField,
+                    textCapitalization: TextCapitalization.words,
+                    autofillHints: const [AutofillHints.name],
+                    decoration: const InputDecoration(labelText: 'Your name'),
+                    validator: (value) => (value == null || value.trim().isEmpty)
+                        ? 'Enter your name'
+                        : null,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                TextFormField(
+                  controller: _emailField,
+                  keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  validator: _validateEmail,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordField,
+                  obscureText: _obscurePassword,
+                  autofillHints: [
+                    if (_isSignUp) AutofillHints.newPassword else AutofillHints.password,
+                  ],
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
+                    ),
+                  ),
+                  validator: _validatePassword,
+                  onFieldSubmitted: (_) => _submit(),
+                ),
+                const SizedBox(height: 28),
+                PressableScale(
+                  child: FilledButton(
+                    onPressed: _busy ? null : _submit,
+                    child: _busy
+                        ? SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: theme.colorScheme.onPrimary,
+                            ),
+                          )
+                        : Text(_isSignUp ? 'Sign up' : 'Log in'),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _busy
+                      ? null
+                      : () => setState(() => _isSignUp = !_isSignUp),
+                  child: Text(
+                    _isSignUp
+                        ? 'Already have an account? Log in'
+                        : "Don't have an account? Sign up",
                   ),
                 ),
               ],
-              const SizedBox(height: 16),
-              Text(
-                'Optional. Anything already on this device stays here and '
-                'reappears if you sign out.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: 28),
-            ],
+            ),
           ),
         ),
       ),
@@ -135,96 +195,17 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
-class _GoogleButton extends StatelessWidget {
-  const _GoogleButton({required this.busy, required this.onPressed});
-
-  final bool busy;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return FilledButton(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: theme.colorScheme.surfaceContainerHighest,
-        foregroundColor: theme.colorScheme.onSurface,
-      ),
-      child: busy
-          ? const SizedBox(
-              height: 22,
-              width: 22,
-              child: CircularProgressIndicator(strokeWidth: 2.5),
-            )
-          : Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                // Google's mark, drawn rather than bundled as an asset so there
-                // is no image to license, ship or scale.
-                const _GoogleMark(),
-                const SizedBox(width: 12),
-                Text(
-                  'Continue with Google',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-    );
+String? _validateEmail(String? value) {
+  final trimmed = value?.trim() ?? '';
+  if (trimmed.isEmpty) return 'Enter your email';
+  if (!trimmed.contains('@') || !trimmed.contains('.')) {
+    return 'Enter a valid email';
   }
+  return null;
 }
 
-class _GoogleMark extends StatelessWidget {
-  const _GoogleMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 20,
-      width: 20,
-      child: CustomPaint(painter: _GooglePainter()),
-    );
-  }
-}
-
-class _GooglePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    final stroke = size.width * 0.22;
-
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.butt;
-
-    final rect = Rect.fromCircle(center: center, radius: radius - stroke / 2);
-
-    // The four brand arcs, in Google's order.
-    canvas
-      ..drawArc(
-        rect,
-        -0.35,
-        1.15,
-        false,
-        paint..color = const Color(0xFF4285F4),
-      )
-      ..drawArc(rect, 0.85, 1.55, false, paint..color = const Color(0xFF34A853))
-      ..drawArc(rect, 2.45, 1.15, false, paint..color = const Color(0xFFFBBC05))
-      ..drawArc(rect, 3.65, 1.75, false, paint..color = const Color(0xFFEA4335))
-      // The horizontal bar of the G.
-      ..drawLine(
-        Offset(center.dx, center.dy),
-        Offset(size.width, center.dy),
-        Paint()
-          ..color = const Color(0xFF4285F4)
-          ..strokeWidth = stroke,
-      );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+String? _validatePassword(String? value) {
+  if (value == null || value.isEmpty) return 'Enter your password';
+  if (value.length < 8) return 'At least 8 characters';
+  return null;
 }

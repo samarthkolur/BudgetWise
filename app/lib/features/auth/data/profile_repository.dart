@@ -125,7 +125,6 @@ class LocalProfileRepository implements ProfileRepository {
     await db.delete('local_profile');
     await db.delete('goals');
     await db.delete('expenses');
-    await db.delete('categories');
     await db.delete('budgets');
   }
 
