@@ -38,11 +38,6 @@ class AuthFailure extends AppFailure {
   const AuthFailure(super.message, {super.cause});
 }
 
-/// The user abandoned the Google sheet. Not an error — no toast, no log.
-class AuthCancelled extends AuthFailure {
-  const AuthCancelled() : super('Sign-in cancelled');
-}
-
 /// The thing exists but is not this user's — or does not exist at all.
 ///
 /// The server reports both as 404 on purpose: distinguishing them would confirm

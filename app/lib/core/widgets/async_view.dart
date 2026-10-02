@@ -128,13 +128,9 @@ class EmptyView extends StatelessWidget {
   }
 }
 
-/// Shows an [AppFailure] as a snack bar, and stays silent for a cancellation.
-///
-/// A user who dismissed the Google sheet knows what they did; telling them
-/// about it is noise.
+/// Shows an [AppFailure] as a snack bar.
 void showFailure(BuildContext context, Object error) {
   final failure = mapError(error);
-  if (failure is AuthCancelled) return;
 
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()

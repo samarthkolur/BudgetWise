@@ -1,13 +1,25 @@
+import 'dart:io';
+
 import 'package:budgetwise/core/api/api_client.dart';
 import 'package:budgetwise/core/api/token_store.dart';
 import 'package:budgetwise/core/db/local_database.dart';
-import 'package:budgetwise/features/auth/data/google_auth_service.dart';
+import 'package:budgetwise/core/sync/hydration_service.dart';
+import 'package:budgetwise/core/sync/sync_queue_repository.dart';
+import 'package:budgetwise/core/sync/sync_service.dart';
+import 'package:budgetwise/features/auth/data/auth_service.dart';
 import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/auth/domain/profile.dart';
 import 'package:budgetwise/features/budget/data/budget_repository.dart';
+import 'package:budgetwise/features/budget/data/syncing_budget_repository.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/expenses/data/expense_repository.dart';
+import 'package:budgetwise/features/expenses/data/syncing_expense_repository.dart';
 import 'package:budgetwise/features/goals/data/goal_repository.dart';
+import 'package:budgetwise/features/goals/data/syncing_goal_repository.dart';
+import 'package:budgetwise/features/sms_detection/data/detected_expense_repository.dart';
+import 'package:budgetwise/features/sms_detection/data/sms_detection_settings_repository.dart';
+import 'package:budgetwise/features/sms_detection/data/sms_permission_service.dart';
+import 'package:budgetwise/features/sms_detection/data/sms_reader.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
@@ -40,8 +52,8 @@ final localDatabaseProvider = Provider<Future<LocalDatabase>>(
 // Auth
 // ---------------------------------------------------------------------------
 
-final googleAuthServiceProvider = Provider<GoogleAuthService>(
-  (ref) => GoogleAuthService(
+final authServiceProvider = Provider<AuthService>(
+  (ref) => AuthService(
     api: ref.watch(apiClientProvider),
     tokens: ref.watch(tokenStoreProvider),
   ),
@@ -75,6 +87,12 @@ final isSignedInProvider = Provider<bool>(
 /// The one pattern behind all four repository providers below — screens and
 /// controllers only ever depend on the interface, so this is the entire seam
 /// between "server-backed" and "local-first".
+///
+/// Profile has no offline-write path worth queuing — `updateProfile` and
+/// `completeOnboarding` are rare, deliberate actions a user can simply retry,
+/// unlike an expense logged in the middle of a purchase — so it stays a plain
+/// switch rather than going through a `Syncing*` wrapper like budgets,
+/// expenses and goals do below.
 final profileRepositoryProvider = Provider<ProfileRepository>(
   (ref) => ref.watch(isSignedInProvider)
       ? ApiProfileRepository(ref.watch(apiClientProvider))
@@ -86,26 +104,121 @@ final profileProvider = FutureProvider<Profile?>(
 );
 
 // ---------------------------------------------------------------------------
+// Offline-first sync — see core/sync/ for the outbox design.
+// ---------------------------------------------------------------------------
+
+final syncQueueRepositoryProvider = Provider<SyncQueueRepository>(
+  (ref) => SyncQueueRepository(ref.watch(localDatabaseProvider)),
+);
+
+final pendingSyncCountProvider = FutureProvider<int>(
+  (ref) => ref.watch(syncQueueRepositoryProvider).count(),
+);
+
+final syncServiceProvider = Provider<SyncService>(
+  (ref) => SyncService(
+    queue: ref.watch(syncQueueRepositoryProvider),
+    apiBudgets: ApiBudgetRepository(ref.watch(apiClientProvider)),
+    apiExpenses: ApiExpenseRepository(ref.watch(apiClientProvider)),
+    apiGoals: ApiGoalRepository(ref.watch(apiClientProvider)),
+  ),
+);
+
+final hydrationServiceProvider = Provider<HydrationService>(
+  (ref) => HydrationService(
+    api: ref.watch(apiClientProvider),
+    dbFuture: ref.watch(localDatabaseProvider),
+  ),
+);
+
+// ---------------------------------------------------------------------------
 // Budget
 // ---------------------------------------------------------------------------
 
-final budgetRepositoryProvider = Provider<BudgetRepository>(
-  (ref) => ref.watch(isSignedInProvider)
-      ? ApiBudgetRepository(ref.watch(apiClientProvider))
-      : LocalBudgetRepository(ref.watch(localDatabaseProvider)),
+final budgetRepositoryProvider = Provider<BudgetRepository>((ref) {
+  if (!ref.watch(isSignedInProvider)) {
+    return LocalBudgetRepository(ref.watch(localDatabaseProvider));
+  }
+  return SyncingBudgetRepository(
+    local: LocalBudgetRepository(ref.watch(localDatabaseProvider)),
+    remote: ApiBudgetRepository(ref.watch(apiClientProvider)),
+    queue: ref.watch(syncQueueRepositoryProvider),
+  );
+});
+
+final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
+  if (!ref.watch(isSignedInProvider)) {
+    return LocalExpenseRepository(ref.watch(localDatabaseProvider));
+  }
+  return SyncingExpenseRepository(
+    local: LocalExpenseRepository(ref.watch(localDatabaseProvider)),
+    remote: ApiExpenseRepository(ref.watch(apiClientProvider)),
+    queue: ref.watch(syncQueueRepositoryProvider),
+  );
+});
+
+final goalRepositoryProvider = Provider<GoalRepository>((ref) {
+  if (!ref.watch(isSignedInProvider)) {
+    return LocalGoalRepository(ref.watch(localDatabaseProvider));
+  }
+  return SyncingGoalRepository(
+    local: LocalGoalRepository(ref.watch(localDatabaseProvider)),
+    remote: ApiGoalRepository(ref.watch(apiClientProvider)),
+    queue: ref.watch(syncQueueRepositoryProvider),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// SMS detection — Android only, opt-in, always local. See
+// features/sms_detection for why this has no API-backed counterpart: SMS
+// only ever exists on the device it arrived on, regardless of sign-in state.
+// ---------------------------------------------------------------------------
+
+/// Routed through a provider rather than an inline `Platform.isAndroid`
+/// check so widget tests can override it — the same reason every other
+/// dependency here is a provider.
+final smsCapableProvider = Provider<bool>((ref) => Platform.isAndroid);
+
+final smsPermissionServiceProvider = Provider<SmsPermissionService>(
+  (ref) => SmsPermissionService(),
 );
 
-final expenseRepositoryProvider = Provider<ExpenseRepository>(
-  (ref) => ref.watch(isSignedInProvider)
-      ? ApiExpenseRepository(ref.watch(apiClientProvider))
-      : LocalExpenseRepository(ref.watch(localDatabaseProvider)),
+final smsReaderProvider = Provider<SmsReader>((ref) => fetchDeviceSmsSince);
+
+final detectedExpenseRepositoryProvider = Provider<DetectedExpenseRepository>(
+  (ref) => LocalDetectedExpenseRepository(ref.watch(localDatabaseProvider)),
 );
 
-final goalRepositoryProvider = Provider<GoalRepository>(
-  (ref) => ref.watch(isSignedInProvider)
-      ? ApiGoalRepository(ref.watch(apiClientProvider))
-      : LocalGoalRepository(ref.watch(localDatabaseProvider)),
-);
+final smsDetectionSettingsRepositoryProvider =
+    Provider<SmsDetectionSettingsRepository>(
+      (ref) => SmsDetectionSettingsRepository(ref.watch(localDatabaseProvider)),
+    );
+
+/// The Settings-screen toggle. A [Notifier] rather than a plain
+/// [FutureProvider] for the same reason [SessionState] is one: flipping the
+/// switch has to push a new value synchronously so the UI doesn't lag behind
+/// the tap.
+class SmsDetectionEnabled extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() =>
+      ref.watch(smsDetectionSettingsRepositoryProvider).isEnabled();
+
+  Future<void> set({required bool enabled}) async {
+    await ref
+        .read(smsDetectionSettingsRepositoryProvider)
+        .setEnabled(enabled: enabled);
+    state = AsyncData(enabled);
+  }
+}
+
+final smsDetectionEnabledProvider =
+    AsyncNotifierProvider<SmsDetectionEnabled, bool>(SmsDetectionEnabled.new);
+
+final pendingDetectedExpensesProvider =
+    FutureProvider.family<List<DetectedExpense>, String>(
+      (ref, budgetId) =>
+          ref.watch(detectedExpenseRepositoryProvider).pendingFor(budgetId),
+    );
 
 /// The month currently being viewed.
 ///
@@ -135,13 +248,6 @@ final currentBudgetProvider = FutureProvider<MonthlyBudget?>(
 final budgetSummaryProvider = FutureProvider.family<BudgetSummary?, Period>(
   (ref, period) => ref.watch(budgetRepositoryProvider).summaryFor(period),
 );
-
-final categoriesProvider = FutureProvider.family<List<CategorySpend>, String>((
-  ref,
-  budgetId,
-) {
-  return ref.watch(budgetRepositoryProvider).categoriesFor(budgetId);
-});
 
 final expensesProvider = FutureProvider.family<List<Expense>, String>((
   ref,
@@ -176,7 +282,6 @@ final investingStatusProvider = FutureProvider<UnlockClaim>(
 final _budgetDataProviders = <ProviderOrFamily>[
   currentBudgetProvider,
   budgetSummaryProvider,
-  categoriesProvider,
   expensesProvider,
   allBudgetsProvider,
   allSummariesProvider,

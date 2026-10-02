@@ -19,14 +19,19 @@ final _shellKey = GlobalKey<NavigatorState>();
 
 /// Routing, including the question that decides where a launch lands.
 ///
-/// Sign-in is optional, not a gate — the app works fully offline, so nothing
-/// forces a user to `Routes.signIn`. It stays reachable from Settings for
-/// whoever wants to add an account later. What the redirect still decides is
-/// the PRD's other opening question: does this month have a plan yet?
-/// Answering that with the absence of a database row (local or server) is
-/// what lets a returning user go straight to their dashboard while a new
-/// month sends them through setup — with no "has the month rolled over" flag
-/// to keep correct.
+/// **Sign-in is now mandatory** — the first check below sends anyone with no
+/// session straight to `Routes.signIn` and keeps them there, with no way to
+/// reach anything else in the app first. That's new; everything after it is
+/// the redirect the app has always had: does this month have a plan yet?
+/// Answering that with the absence of a database row is what lets an
+/// existing account with this month already set up land straight on the
+/// dashboard, while a brand-new account (which by definition has no budget,
+/// ever) lands on onboarding — once this check only ever runs after sign-in,
+/// it already distinguishes a new account from an existing one with no
+/// second "has this account ever onboarded" flag needed. See
+/// `profileRepositoryProvider`/`budgetRepositoryProvider` in `providers.dart`
+/// for how the app's data source switches from local to server-backed the
+/// moment a session exists.
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: Routes.dashboard,
@@ -38,6 +43,21 @@ final routerProvider = Provider<GoRouter>((ref) {
 
     redirect: (context, state) {
       final location = state.matchedLocation;
+
+      // Wait to know for sure before bouncing anyone — an unresolved session
+      // check would momentarily send a signed-in user back to sign-in on
+      // every cold start, which reads as a bug even though it corrects
+      // itself a frame later.
+      final session = ref.read(sessionProvider);
+      if (session.isLoading || session.hasError) return null;
+
+      final isSignedIn = session.value ?? false;
+      if (!isSignedIn) {
+        return location == Routes.signIn ? null : Routes.signIn;
+      }
+      if (location == Routes.signIn) {
+        return Routes.dashboard;
+      }
 
       // Wait for the month's plan before deciding — redirecting on an
       // unresolved future would bounce the user to onboarding for a moment on
