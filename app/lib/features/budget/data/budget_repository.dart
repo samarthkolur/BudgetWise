@@ -11,7 +11,6 @@ import 'package:uuid/uuid.dart';
 abstract class BudgetRepository {
   Future<MonthlyBudget?> currentBudget();
   Future<BudgetSummary?> summaryFor(Period period);
-  Future<List<CategorySpend>> categoriesFor(String budgetId);
   Future<List<MonthlyBudget>> allBudgets();
   Future<List<BudgetSummary>> allSummaries();
   Future<MonthlyBudget> createMonth({
@@ -19,20 +18,15 @@ abstract class BudgetRepository {
     required Money income,
     required SavingsMode savingsMode,
     required Money savingsTarget,
-    required List<Allocation<CategoryTemplate>> allocations,
     double? savingsPercent,
     Money? investmentTarget,
     Period? carriedFrom,
+    String? id,
   });
   Future<void> confirmSavings({
     required String budgetId,
     required Money amount,
     String destination = 'bank',
-  });
-  Future<void> updateCategoryAllocation({
-    required String categoryId,
-    required Money allocated,
-    required double percent,
   });
 }
 
@@ -64,15 +58,6 @@ class ApiBudgetRepository implements BudgetRepository {
   });
 
   @override
-  Future<List<CategorySpend>> categoriesFor(String budgetId) async =>
-      guarded(() async {
-        final rows = await _api.get('/v1/budgets/$budgetId/categories') as List;
-        return rows
-            .map((r) => CategorySpend.fromJson(r as Map<String, dynamic>))
-            .toList();
-      });
-
-  @override
   Future<List<MonthlyBudget>> allBudgets() async => guarded(() async {
     final rows = await _api.get('/v1/budgets') as List;
     return rows
@@ -88,25 +73,23 @@ class ApiBudgetRepository implements BudgetRepository {
         .toList();
   });
 
-  /// Creates a month's plan and all its categories in one request.
-  ///
-  /// One call, not two: the server writes the budget and its categories
-  /// together, and refuses an allocation that does not sum to spendable income
-  /// using the same largest-remainder arithmetic this app used to build it —
-  /// both sides import budgetwise_domain, so they cannot drift.
+  /// [id] is only passed by `SyncingBudgetRepository`, replaying a month that
+  /// was already written locally while offline — see the matching note on
+  /// `ApiExpenseRepository.add`.
   @override
   Future<MonthlyBudget> createMonth({
     required Period period,
     required Money income,
     required SavingsMode savingsMode,
     required Money savingsTarget,
-    required List<Allocation<CategoryTemplate>> allocations,
     double? savingsPercent,
     Money? investmentTarget,
     Period? carriedFrom,
+    String? id,
   }) async => guarded(() async {
     final row =
         await _api.post('/v1/budgets', {
+              if (id != null) 'id': id,
               'period': period.isoDate,
               'incomeMinor': income.minor,
               'savingsMode': savingsMode.name,
@@ -114,17 +97,6 @@ class ApiBudgetRepository implements BudgetRepository {
               'savingsTargetMinor': savingsTarget.minor,
               'investmentTargetMinor': investmentTarget?.minor,
               'carriedFromPeriod': carriedFrom?.isoDate,
-              'categories': [
-                for (var i = 0; i < allocations.length; i++)
-                  {
-                    'categoryKey': allocations[i].key.key,
-                    'displayName': allocations[i].key.name,
-                    'icon': allocations[i].key.icon,
-                    'allocatedMinor': allocations[i].amount.minor,
-                    'allocatedPercent': allocations[i].percent,
-                    'sortOrder': i,
-                  },
-              ],
             })
             as Map<String, dynamic>;
     return MonthlyBudget.fromJson(row);
@@ -146,29 +118,16 @@ class ApiBudgetRepository implements BudgetRepository {
       'destination': destination,
     }),
   );
-
-  @override
-  Future<void> updateCategoryAllocation({
-    required String categoryId,
-    required Money allocated,
-    required double percent,
-  }) async => guarded(
-    () => _api.patch('/v1/categories/$categoryId', {
-      'allocatedMinor': allocated.minor,
-      'allocatedPercent': percent,
-    }),
-  );
 }
 
 /// Talks to the on-device database, used whenever no one is signed in.
 ///
 /// A repository's job is fetching and mapping, not computing business rules —
-/// the same boundary the API repository sits on. The category/expense
-/// aggregation below (`SUM`, `GROUP BY`, `COUNT DISTINCT`) is the SQL
-/// equivalent of the API's JSON response shape, not budget arithmetic; the
-/// actual arithmetic — [CategoryProgress], [spendableIncome], safe-daily-spend
-/// — stays in `budgetwise_domain` and is reached through the models exactly as
-/// it already is for API data.
+/// the same boundary the API repository sits on. The expense aggregation
+/// below (`SUM`, `COUNT DISTINCT`) is the SQL equivalent of the API's JSON
+/// response shape, not budget arithmetic; the actual arithmetic —
+/// [spendableIncome], safe-daily-spend — stays in `budgetwise_domain` and is
+/// reached through the models exactly as it already is for API data.
 class LocalBudgetRepository implements BudgetRepository {
   LocalBudgetRepository(this._dbFuture);
 
@@ -183,18 +142,12 @@ class LocalBudgetRepository implements BudgetRepository {
     if (budget == null) return null;
     final db = (await _dbFuture).db;
 
-    final categoryTotals = await db.rawQuery(
-      'SELECT COUNT(*) AS cnt, COALESCE(SUM(allocated_minor), 0) AS total '
-      'FROM categories WHERE budget_id = ?',
-      [budget.id],
-    );
     final expenseTotals = await db.rawQuery(
       'SELECT COUNT(*) AS cnt, COALESCE(SUM(amount_minor), 0) AS total, '
       'COUNT(DISTINCT spent_on) AS days FROM expenses WHERE budget_id = ?',
       [budget.id],
     );
 
-    final allocated = Money(categoryTotals.first['total']! as int);
     final spent = Money(expenseTotals.first['total']! as int);
     final savedActual = budget.isSavingsConfirmed
         ? budget.savingsTarget
@@ -206,7 +159,6 @@ class LocalBudgetRepository implements BudgetRepository {
       income: budget.income,
       savingsTarget: budget.savingsTarget,
       savedActual: savedActual,
-      allocated: allocated,
       spent: spent,
       spendable: budget.spendable,
       remaining: (budget.spendable - spent).orZeroIfNegative,
@@ -214,50 +166,10 @@ class LocalBudgetRepository implements BudgetRepository {
       // — there is nothing locally to have invested yet.
       investedActual: const Money.zero(),
       investmentTarget: budget.investmentTarget,
-      categoryCount: categoryTotals.first['cnt']! as int,
       expenseCount: expenseTotals.first['cnt']! as int,
       daysWithExpenses: expenseTotals.first['days']! as int,
       savingsConfirmedAt: budget.savingsConfirmedAt,
     );
-  }
-
-  @override
-  Future<List<CategorySpend>> categoriesFor(String budgetId) async {
-    final db = (await _dbFuture).db;
-    final rows = await db.query(
-      'categories',
-      where: 'budget_id = ?',
-      whereArgs: [budgetId],
-      orderBy: 'sort_order',
-    );
-    final spentRows = await db.rawQuery(
-      'SELECT category_id, COALESCE(SUM(amount_minor), 0) AS total, '
-      'COUNT(*) AS cnt FROM expenses WHERE budget_id = ? GROUP BY category_id',
-      [budgetId],
-    );
-    final spentByCategory = {
-      for (final r in spentRows)
-        r['category_id']! as String: r['total']! as int,
-    };
-    final countByCategory = {
-      for (final r in spentRows) r['category_id']! as String: r['cnt']! as int,
-    };
-
-    return [
-      for (final row in rows)
-        CategorySpend(
-          id: row['id']! as String,
-          budgetId: row['budget_id']! as String,
-          key: row['key']! as String,
-          name: row['name']! as String,
-          icon: row['icon']! as String,
-          allocated: Money(row['allocated_minor']! as int),
-          spent: Money(spentByCategory[row['id']] ?? 0),
-          allocatedPercent: (row['allocated_percent']! as num).toDouble(),
-          expenseCount: countByCategory[row['id']] ?? 0,
-          sortOrder: row['sort_order']! as int,
-        ),
-    ];
   }
 
   @override
@@ -284,15 +196,15 @@ class LocalBudgetRepository implements BudgetRepository {
     required Money income,
     required SavingsMode savingsMode,
     required Money savingsTarget,
-    required List<Allocation<CategoryTemplate>> allocations,
     double? savingsPercent,
     Money? investmentTarget,
     Period? carriedFrom,
+    String? id,
   }) async {
     final db = (await _dbFuture).db;
     const uuid = Uuid();
     final budget = MonthlyBudget(
-      id: uuid.v4(),
+      id: id ?? uuid.v4(),
       period: period,
       income: income,
       savingsTarget: savingsTarget,
@@ -303,19 +215,6 @@ class LocalBudgetRepository implements BudgetRepository {
     );
 
     await db.insert('budgets', _budgetToRow(budget));
-    for (var i = 0; i < allocations.length; i++) {
-      final allocation = allocations[i];
-      await db.insert('categories', {
-        'id': uuid.v4(),
-        'budget_id': budget.id,
-        'key': allocation.key.key,
-        'name': allocation.key.name,
-        'icon': allocation.key.icon,
-        'allocated_minor': allocation.amount.minor,
-        'allocated_percent': allocation.percent,
-        'sort_order': i,
-      });
-    }
     return budget;
   }
 
@@ -331,21 +230,6 @@ class LocalBudgetRepository implements BudgetRepository {
       {'savings_confirmed_at': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [budgetId],
-    );
-  }
-
-  @override
-  Future<void> updateCategoryAllocation({
-    required String categoryId,
-    required Money allocated,
-    required double percent,
-  }) async {
-    final db = (await _dbFuture).db;
-    await db.update(
-      'categories',
-      {'allocated_minor': allocated.minor, 'allocated_percent': percent},
-      where: 'id = ?',
-      whereArgs: [categoryId],
     );
   }
 

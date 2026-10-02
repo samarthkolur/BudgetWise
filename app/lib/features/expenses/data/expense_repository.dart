@@ -12,15 +12,14 @@ abstract class ExpenseRepository {
   Future<List<Expense>> forBudget(String budgetId);
   Future<Expense> add({
     required String budgetId,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
     String? note,
+    String? id,
   });
   Future<Expense> update({
     required String id,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
@@ -42,19 +41,24 @@ class ApiExpenseRepository implements ExpenseRepository {
         .toList();
   });
 
+  /// [id] is only ever passed by `SyncingExpenseRepository`, replaying an
+  /// expense that was already written to the local database while offline —
+  /// the server accepts a client-supplied id on create so the synced row
+  /// keeps the exact id its local copy already has, with no remapping step.
+  /// Every other caller omits it and lets the server generate one.
   @override
   Future<Expense> add({
     required String budgetId,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
     String? note,
+    String? id,
   }) async => guarded(() async {
     final row =
         await _api.post('/v1/expenses', {
+              if (id != null) 'id': id,
               'budgetId': budgetId,
-              'categoryId': categoryId,
               'amountMinor': amount.minor,
               'spentOn': dateOnly(spentOn),
               'paymentMethod': paymentMethod.name,
@@ -67,7 +71,6 @@ class ApiExpenseRepository implements ExpenseRepository {
   @override
   Future<Expense> update({
     required String id,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
@@ -75,7 +78,6 @@ class ApiExpenseRepository implements ExpenseRepository {
   }) async => guarded(() async {
     final row =
         await _api.patch('/v1/expenses/$id', {
-              'categoryId': categoryId,
               'amountMinor': amount.minor,
               'spentOn': dateOnly(spentOn),
               'paymentMethod': paymentMethod.name,
@@ -99,11 +101,11 @@ class LocalExpenseRepository implements ExpenseRepository {
   @override
   Future<List<Expense>> forBudget(String budgetId) async {
     final db = (await _dbFuture).db;
-    final rows = await db.rawQuery(
-      'SELECT e.*, c.name AS category_name, c.icon AS category_icon '
-      'FROM expenses e JOIN categories c ON c.id = e.category_id '
-      'WHERE e.budget_id = ? ORDER BY e.spent_on DESC',
-      [budgetId],
+    final rows = await db.query(
+      'expenses',
+      where: 'budget_id = ?',
+      whereArgs: [budgetId],
+      orderBy: 'spent_on DESC',
     );
     return rows.map(_fromRow).toList();
   }
@@ -111,30 +113,28 @@ class LocalExpenseRepository implements ExpenseRepository {
   @override
   Future<Expense> add({
     required String budgetId,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
     String? note,
+    String? id,
   }) async {
     final db = (await _dbFuture).db;
-    final id = const Uuid().v4();
+    final resolvedId = id ?? const Uuid().v4();
     await db.insert('expenses', {
-      'id': id,
+      'id': resolvedId,
       'budget_id': budgetId,
-      'category_id': categoryId,
       'amount_minor': amount.minor,
       'spent_on': dateOnly(spentOn),
       'payment_method': paymentMethod.name,
       'note': note,
     });
-    return _mustFind(id);
+    return _mustFind(resolvedId);
   }
 
   @override
   Future<Expense> update({
     required String id,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
@@ -144,7 +144,6 @@ class LocalExpenseRepository implements ExpenseRepository {
     await db.update(
       'expenses',
       {
-        'category_id': categoryId,
         'amount_minor': amount.minor,
         'spent_on': dateOnly(spentOn),
         'payment_method': paymentMethod.name,
@@ -164,25 +163,17 @@ class LocalExpenseRepository implements ExpenseRepository {
 
   Future<Expense> _mustFind(String id) async {
     final db = (await _dbFuture).db;
-    final rows = await db.rawQuery(
-      'SELECT e.*, c.name AS category_name, c.icon AS category_icon '
-      'FROM expenses e JOIN categories c ON c.id = e.category_id '
-      'WHERE e.id = ?',
-      [id],
-    );
+    final rows = await db.query('expenses', where: 'id = ?', whereArgs: [id]);
     return _fromRow(rows.first);
   }
 
   static Expense _fromRow(Map<String, Object?> row) => Expense(
     id: row['id']! as String,
     budgetId: row['budget_id']! as String,
-    categoryId: row['category_id']! as String,
     amount: Money(row['amount_minor']! as int),
     spentOn: DateTime.parse(row['spent_on']! as String),
     paymentMethod: PaymentMethod.fromDb(row['payment_method']! as String),
     note: row['note'] as String?,
-    categoryName: row['category_name'] as String?,
-    categoryIcon: row['category_icon'] as String?,
   );
 }
 
