@@ -80,6 +80,16 @@ paths = [
 
   # Lockfiles are full of base64-looking hashes.
   '''app/pubspec\.lock''',
+
+  # `android-keystore-password`'s rule captures just the field name
+  # (`keyAlias`/`keyPassword`/`storePassword`) as its "secret", by construction
+  # of its own regex — so it cannot be allowlisted by value or shape, only by
+  # path. That's fine here: this file only ever reads those three values out of
+  # the gitignored `key.properties` (`keyAlias = keystoreProperties["keyAlias"]
+  # as String`), and structurally cannot contain a literal credential — unlike
+  # the value-based entries above, a real password hardcoded into this file
+  # would need its own, different rule to catch, not this allowlist entry.
+  '''app/android/app/build\.gradle\.kts''',
 ]
 
 regexes = [
