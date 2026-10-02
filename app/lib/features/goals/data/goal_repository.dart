@@ -16,6 +16,7 @@ abstract class GoalRepository {
     DateTime? targetDate,
     Money? monthlyContribution,
     String? icon,
+    String? id,
   });
   Future<void> contribute({
     required String goalId,
@@ -36,6 +37,9 @@ class ApiGoalRepository implements GoalRepository {
     return rows.map((r) => Goal.fromJson(r as Map<String, dynamic>)).toList();
   });
 
+  /// [id] is only passed by `SyncingGoalRepository`, replaying a goal that
+  /// was already written locally while offline — see the matching note on
+  /// `ApiExpenseRepository.add`.
   @override
   Future<Goal> create({
     required String title,
@@ -43,9 +47,11 @@ class ApiGoalRepository implements GoalRepository {
     DateTime? targetDate,
     Money? monthlyContribution,
     String? icon,
+    String? id,
   }) async => guarded(() async {
     final row =
         await _api.post('/v1/goals', {
+              if (id != null) 'id': id,
               'title': title,
               'targetMinor': target.minor,
               'targetDate': targetDate?.toUtc().toIso8601String(),
@@ -103,10 +109,11 @@ class LocalGoalRepository implements GoalRepository {
     DateTime? targetDate,
     Money? monthlyContribution,
     String? icon,
+    String? id,
   }) async {
     final db = (await _dbFuture).db;
     final goal = Goal(
-      id: const Uuid().v4(),
+      id: id ?? const Uuid().v4(),
       title: title,
       target: target,
       saved: const Money.zero(),

@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:budgetwise/core/providers.dart';
 import 'package:budgetwise/core/router/app_router.dart';
+import 'package:budgetwise/core/sync/connectivity_provider.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/widgets/celebration_overlay.dart';
 import 'package:budgetwise/core/widgets/motion.dart';
 import 'package:budgetwise/features/expenses/presentation/expense_sheet.dart';
+import 'package:budgetwise/features/sms_detection/application/sms_detection_controller.dart';
+import 'package:budgetwise/features/sms_detection/presentation/detected_expenses_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -24,6 +29,12 @@ import 'package:go_router/go_router.dart';
 /// transition on the unlock claim's `isUnlocked` flag, never a timer or a
 /// re-render, so it plays exactly once per unlock regardless of which tab
 /// the user is on when it happens.
+///
+/// And where the SMS-detection review is triggered: once per budget per app
+/// session (tracked in [_AppShellState._smsCheckedBudgets], never
+/// persisted), it runs the on-device scan and shows the review sheet only if
+/// that scan actually found something new — never an empty or repeat popup
+/// once the backlog is cleared.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({required this.child, super.key});
 
@@ -61,10 +72,71 @@ class _AppShellState extends ConsumerState<AppShell> {
     ),
   ];
 
+  final Set<String> _smsCheckedBudgets = {};
+  bool _checkedSyncOnLaunch = false;
+
   int _indexFor(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _destinations.indexWhere((d) => location.startsWith(d.path));
     return index < 0 ? 0 : index;
+  }
+
+  Future<void> _checkSmsDetection(String budgetId) async {
+    await ref
+        .read(smsDetectionControllerProvider.notifier)
+        .checkForNewTransactions(budgetId);
+    final pending = await ref.read(
+      pendingDetectedExpensesProvider(budgetId).future,
+    );
+    if (pending.isNotEmpty && mounted) {
+      await showDetectedExpensesSheet(context, ref, budgetId);
+    }
+  }
+
+  /// Offers to sync whatever is already queued — covers both "reconnected
+  /// mid-session" (the listener below) and "relaunched the app while still
+  /// online with items queued from a previous, now-closed session" (this
+  /// one-time check, since the latter never fires a false→true transition for
+  /// this process to observe).
+  Future<void> _offerSyncIfPending() async {
+    final pending = await ref.read(syncQueueRepositoryProvider).count();
+    if (pending == 0 || !mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            pending == 1
+                ? "You're back online — sync 1 change?"
+                : "You're back online — sync $pending changes?",
+          ),
+          duration: const Duration(seconds: 10),
+          action: SnackBarAction(label: 'Sync now', onPressed: _runSync),
+        ),
+      );
+  }
+
+  void _runSync() {
+    unawaited(() async {
+      final result = await ref.read(syncServiceProvider).syncPending();
+      ref
+        ..invalidate(pendingSyncCountProvider)
+        ..refreshBudgetData();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              result.isComplete
+                  ? 'All changes synced.'
+                  : '${result.failed} change(s) could not be synced — '
+                        "they'll stay queued.",
+            ),
+          ),
+        );
+    }());
   }
 
   @override
@@ -72,16 +144,42 @@ class _AppShellState extends ConsumerState<AppShell> {
     final scheme = Theme.of(context).colorScheme;
     final budgetId = ref.watch(currentBudgetProvider).value?.id;
 
-    ref.listen(investingStatusProvider, (previous, next) {
-      final was = previous?.value?.isUnlocked ?? false;
-      final isNow = next.value?.isUnlocked ?? false;
-      if (!was && isNow) {
-        CelebrationOverlay.show(
-          context,
-          streakMonths: next.value!.streakMonths,
-        );
-      }
-    });
+    ref
+      ..listen(investingStatusProvider, (previous, next) {
+        final was = previous?.value?.isUnlocked ?? false;
+        final isNow = next.value?.isUnlocked ?? false;
+        if (!was && isNow) {
+          CelebrationOverlay.show(
+            context,
+            streakMonths: next.value!.streakMonths,
+          );
+        }
+      })
+      // The transition that matters is false → true specifically —
+      // reachable regardless of what the very first emission after launch
+      // happens to be, since `previous` on that first call is the
+      // provider's initial loading state, whose `.value` is null, not
+      // false.
+      ..listen(connectivityProvider, (previous, next) {
+        final wasOffline = previous?.value == false;
+        final isOnlineNow = next.value ?? false;
+        if (wasOffline && isOnlineNow) {
+          unawaited(_offerSyncIfPending());
+        }
+      });
+
+    if (!_checkedSyncOnLaunch) {
+      _checkedSyncOnLaunch = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_offerSyncIfPending());
+      });
+    }
+
+    if (budgetId != null && _smsCheckedBudgets.add(budgetId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(_checkSmsDetection(budgetId));
+      });
+    }
 
     final selected = _indexFor(context);
 
@@ -157,11 +255,8 @@ class _AddButton extends StatelessWidget {
           width: 40,
           height: 40,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: scheme.primary,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.add_rounded, size: 24, color: Colors.white),
+          color: scheme.secondary,
+          child: Icon(Icons.add_rounded, size: 24, color: scheme.onSecondary),
         ),
       ),
     );

@@ -43,9 +43,10 @@ class FakeGoalRepository implements GoalRepository {
     DateTime? targetDate,
     Money? monthlyContribution,
     String? icon,
+    String? id,
   }) async {
     final goal = Goal(
-      id: 'goal-${_nextId++}',
+      id: id ?? 'goal-${_nextId++}',
       title: title,
       target: target,
       saved: const Money.zero(),
@@ -86,17 +87,12 @@ class FakeGoalRepository implements GoalRepository {
 }
 
 class FakeBudgetRepository implements BudgetRepository {
-  FakeBudgetRepository({
-    MonthlyBudget? budget,
-    BudgetSummary? summary,
-    List<CategorySpend>? categories,
-  }) : _budget = budget,
-       _summary = summary,
-       _categories = [...?categories];
+  FakeBudgetRepository({MonthlyBudget? budget, BudgetSummary? summary})
+    : _budget = budget,
+      _summary = summary;
 
   MonthlyBudget? _budget;
   BudgetSummary? _summary;
-  final List<CategorySpend> _categories;
 
   @override
   Future<MonthlyBudget?> currentBudget() async => _budget;
@@ -104,10 +100,6 @@ class FakeBudgetRepository implements BudgetRepository {
   @override
   Future<BudgetSummary?> summaryFor(Period period) async =>
       _summary?.period == period ? _summary : null;
-
-  @override
-  Future<List<CategorySpend>> categoriesFor(String budgetId) async =>
-      List.unmodifiable(_categories);
 
   @override
   Future<List<MonthlyBudget>> allBudgets() async =>
@@ -123,13 +115,13 @@ class FakeBudgetRepository implements BudgetRepository {
     required Money income,
     required SavingsMode savingsMode,
     required Money savingsTarget,
-    required List<Allocation<CategoryTemplate>> allocations,
     double? savingsPercent,
     Money? investmentTarget,
     Period? carriedFrom,
+    String? id,
   }) async {
     final budget = MonthlyBudget(
-      id: 'budget-1',
+      id: id ?? 'budget-1',
       period: period,
       income: income,
       savingsTarget: savingsTarget,
@@ -155,26 +147,17 @@ class FakeBudgetRepository implements BudgetRepository {
         income: _summary!.income,
         savingsTarget: _summary!.savingsTarget,
         savedActual: _summary!.savingsTarget,
-        allocated: _summary!.allocated,
         spent: _summary!.spent,
         spendable: _summary!.spendable,
         remaining: _summary!.remaining,
         investedActual: _summary!.investedActual,
         investmentTarget: _summary!.investmentTarget,
-        categoryCount: _summary!.categoryCount,
         expenseCount: _summary!.expenseCount,
         daysWithExpenses: _summary!.daysWithExpenses,
         savingsConfirmedAt: DateTime.now(),
       );
     }
   }
-
-  @override
-  Future<void> updateCategoryAllocation({
-    required String categoryId,
-    required Money allocated,
-    required double percent,
-  }) async {}
 }
 
 class FakeExpenseRepository implements ExpenseRepository {
@@ -191,16 +174,15 @@ class FakeExpenseRepository implements ExpenseRepository {
   @override
   Future<Expense> add({
     required String budgetId,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
     String? note,
+    String? id,
   }) async {
     final expense = Expense(
-      id: 'expense-${_nextId++}',
+      id: id ?? 'expense-${_nextId++}',
       budgetId: budgetId,
-      categoryId: categoryId,
       amount: amount,
       spentOn: spentOn,
       paymentMethod: paymentMethod,
@@ -213,7 +195,6 @@ class FakeExpenseRepository implements ExpenseRepository {
   @override
   Future<Expense> update({
     required String id,
-    required String categoryId,
     required Money amount,
     required DateTime spentOn,
     required PaymentMethod paymentMethod,
@@ -223,7 +204,6 @@ class FakeExpenseRepository implements ExpenseRepository {
     final updated = Expense(
       id: id,
       budgetId: _expenses[index].budgetId,
-      categoryId: categoryId,
       amount: amount,
       spentOn: spentOn,
       paymentMethod: paymentMethod,
@@ -297,14 +277,12 @@ class FakeDetectedExpenseRepository implements DetectedExpenseRepository {
       List.unmodifiable(_pending.where((d) => d.budgetId == budgetId));
 
   @override
-  Future<void> categorize({
+  Future<void> confirm({
     required DetectedExpense detected,
-    required String categoryId,
     required ExpenseRepository expenses,
   }) async {
     await expenses.add(
       budgetId: detected.budgetId,
-      categoryId: categoryId,
       amount: detected.amount,
       spentOn: detected.occurredOn,
       paymentMethod: PaymentMethod.upi,
