@@ -20,7 +20,6 @@ void main() {
   late Session alice;
   late Session bob;
   late String aliceBudgetId;
-  late String aliceCategoryId;
   late String aliceExpenseId;
   late String aliceGoalId;
 
@@ -40,21 +39,13 @@ void main() {
         'savingsMode': 'percent',
         'savingsPercent': 20.0,
         'savingsTargetMinor': 1000000,
-        'categories': categoriesFor(4000000),
       }),
     );
     aliceBudgetId = budget['id'] as String;
 
-    final categories = await jsonBody<List<dynamic>>(
-      await alice.get('/v1/budgets/$aliceBudgetId/categories'),
-    );
-    aliceCategoryId =
-        (categories.first as Map<String, dynamic>)['categoryId'] as String;
-
     final expense = await jsonBody<Map<String, dynamic>>(
       await alice.post('/v1/expenses', {
         'budgetId': aliceBudgetId,
-        'categoryId': aliceCategoryId,
         'amountMinor': 25000,
         'spentOn': '2026-08-04',
         'note': 'alice lunch',
@@ -97,11 +88,6 @@ void main() {
       );
     });
 
-    test("bob cannot read alice's budget by id", () async {
-      final response = await bob.get('/v1/budgets/$aliceBudgetId/categories');
-      expect(response.statusCode, 404);
-    });
-
     test("bob cannot list expenses on alice's budget", () async {
       final response = await bob.get('/v1/budgets/$aliceBudgetId/expenses');
       expect(response.statusCode, 404);
@@ -115,7 +101,6 @@ void main() {
     test("bob cannot attach an expense he owns to alice's budget", () async {
       final response = await bob.post('/v1/expenses', {
         'budgetId': aliceBudgetId,
-        'categoryId': aliceCategoryId,
         'amountMinor': 5000,
         'spentOn': '2026-08-04',
       });
@@ -138,7 +123,6 @@ void main() {
     // Was: "cross-user update and delete affect nothing".
     test("bob cannot update or delete alice's expense", () async {
       final update = await bob.patch('/v1/expenses/$aliceExpenseId', {
-        'categoryId': aliceCategoryId,
         'amountMinor': 1,
         'spentOn': '2026-08-04',
       });
@@ -277,7 +261,6 @@ void main() {
           'savingsMode': 'percent',
           'savingsPercent': 10.0,
           'savingsTargetMinor': 100000,
-          'categories': categoriesFor(900000),
         }),
       );
       await carol.post('/v1/goals', {'title': 'Trip', 'targetMinor': 500000});

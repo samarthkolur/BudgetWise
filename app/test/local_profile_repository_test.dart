@@ -1,7 +1,6 @@
 import 'package:budgetwise/core/db/local_database.dart';
 import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/budget/data/budget_repository.dart';
-import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -69,13 +68,6 @@ void main() {
     () async {
       final db = await dbFuture;
       final budgets = LocalBudgetRepository(dbFuture);
-      const template = CategoryTemplate(
-        key: 'food',
-        name: 'Food',
-        icon: '🍽️',
-        defaultPercent: 100,
-        isEssential: true,
-      );
 
       await profiles.current();
       await budgets.createMonth(
@@ -84,17 +76,12 @@ void main() {
         savingsMode: SavingsMode.percent,
         savingsTarget: const Money.zero(),
         savingsPercent: 0,
-        allocations: allocateByPercent(
-          total: const Money(1000000),
-          percents: {template: 100},
-        ),
       );
 
       await profiles.deleteAccount();
 
       expect(await db.db.query('local_profile'), isEmpty);
       expect(await db.db.query('budgets'), isEmpty);
-      expect(await db.db.query('categories'), isEmpty);
     },
   );
 }

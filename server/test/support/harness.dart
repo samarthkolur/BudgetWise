@@ -213,27 +213,3 @@ class Session {
 /// Reads a JSON body.
 Future<T> jsonBody<T>(Response response) async =>
     jsonDecode(await response.readAsString()) as T;
-
-/// Two categories, split evenly, summing exactly to [spendableMinor].
-List<Map<String, dynamic>> categoriesFor(int spendableMinor) {
-  // Two categories, split evenly, so the arithmetic in the tests stays obvious.
-  final half = spendableMinor ~/ 2;
-  return [
-    {
-      'categoryKey': 'food',
-      'displayName': 'Food',
-      'icon': '🍽️',
-      'allocatedMinor': half,
-      'allocatedPercent': 50.0,
-      'sortOrder': 0,
-    },
-    {
-      'categoryKey': 'bills',
-      'displayName': 'Bills',
-      'icon': '🧾',
-      'allocatedMinor': spendableMinor - half,
-      'allocatedPercent': 50.0,
-      'sortOrder': 1,
-    },
-  ];
-}

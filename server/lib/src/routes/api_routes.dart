@@ -33,8 +33,6 @@ class ApiRoutes {
     ..get('/budgets/current', _currentBudget)
     ..get('/summaries', _listSummaries)
     ..get('/summaries/<period>', _summaryForPeriod)
-    ..get('/budgets/<budgetId>/categories', _categories)
-    ..patch('/categories/<categoryId>', _updateCategory)
     ..get('/budgets/<budgetId>/expenses', _listExpenses)
     ..post('/expenses', _createExpense)
     ..patch('/expenses/<expenseId>', _updateExpense)
@@ -114,13 +112,6 @@ class ApiRoutes {
     final period = Period.parse(_requireString(body, 'period'));
     final income = Money(_requireInt(body, 'incomeMinor'));
     final savingsTarget = Money(_requireInt(body, 'savingsTargetMinor'));
-    final categories = (body['categories'] as List?)
-        ?.cast<Map<String, dynamic>>();
-    if (categories == null || categories.isEmpty) {
-      throw const ApiException.badRequest(
-        'A month needs at least one category.',
-      );
-    }
 
     final budget = await _budgets(request).createMonth(
       period: period,
@@ -136,7 +127,6 @@ class ApiRoutes {
       carriedFrom: body['carriedFromPeriod'] == null
           ? null
           : Period.parse(body['carriedFromPeriod'] as String),
-      categories: categories,
     );
 
     return jsonResponse(_serialise(budget), status: 201);
@@ -149,20 +139,6 @@ class ApiRoutes {
       jsonResponse(
         await _budgets(request).summaryForPeriod(Period.parse(period)),
       );
-
-  Future<Response> _categories(Request request, String budgetId) async =>
-      jsonResponse(await _budgets(request).categorySpend(_objectId(budgetId)));
-
-  Future<Response> _updateCategory(Request request, String categoryId) async {
-    final body = await readJson(request);
-    final updated = await _budgets(request).updateCategoryAllocation(
-      categoryId: _objectId(categoryId),
-      allocated: Money(_requireInt(body, 'allocatedMinor')),
-      percent: (body['allocatedPercent'] as num?)?.toDouble() ?? 0,
-    );
-    if (updated == null) throw const ApiException.notFound();
-    return jsonResponse(_serialise(updated));
-  }
 
   Future<Response> _confirmSavings(Request request, String budgetId) async {
     final body = await readJson(request);
@@ -185,7 +161,6 @@ class ApiRoutes {
     final body = await readJson(request);
     final expense = await _expenses(request).add(
       budgetId: _objectId(_requireString(body, 'budgetId')),
-      categoryId: _objectId(_requireString(body, 'categoryId')),
       amount: Money(_requireInt(body, 'amountMinor')),
       spentOn: DateTime.parse(_requireString(body, 'spentOn')),
       paymentMethod: body['paymentMethod'] as String? ?? 'upi',
@@ -198,7 +173,6 @@ class ApiRoutes {
     final body = await readJson(request);
     final expense = await _expenses(request).update(
       id: _objectId(expenseId),
-      categoryId: _objectId(_requireString(body, 'categoryId')),
       amount: Money(_requireInt(body, 'amountMinor')),
       spentOn: DateTime.parse(_requireString(body, 'spentOn')),
       paymentMethod: body['paymentMethod'] as String? ?? 'upi',
