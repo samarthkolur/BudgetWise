@@ -1,0 +1,156 @@
+// BudgetWise API — PostgreSQL schema.
+//
+// All ids are client-supplyable UUIDs: `@default(uuid())` only applies when a
+// `create()` call omits `id`, so a row that was created offline on the phone
+// keeps the same id when it syncs, while a server-originated row still gets
+// one generated for it. This mirrors the Flutter app's existing offline-first
+// client-side UUID generation.
+//
+// Money is always an integer count of paise (`Int` columns) — never a float
+// or Decimal. See CLAUDE.md's non-negotiable rule #5.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String
+  displayName           String?
+  avatarUrl             String?
+  currency              String    @default("INR")
+  locale                String    @default("en_IN")
+  onboardingCompletedAt DateTime?
+  investingUnlockedAt   DateTime?
+  createdAt             DateTime  @default(now())
+  lastSignInAt          DateTime?
+
+  refreshTokens     RefreshToken[]
+  budgets           Budget[]
+  expenses          Expense[]
+  savingsEntries    SavingsEntry[]
+  goals             Goal[]
+  goalContributions GoalContribution[]
+  investments       Investment[]
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+model Budget {
+  id                    String    @id @default(uuid())
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period                DateTime  @db.Date
+  incomeMinor           Int
+  savingsMode           String
+  savingsPercent        Float?
+  savingsTargetMinor    Int
+  investmentTargetMinor Int?
+  savingsConfirmedAt    DateTime?
+  status                String    @default("active")
+  carriedFromPeriod     DateTime? @db.Date
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  expenses          Expense[]
+  savingsEntries    SavingsEntry[]
+  investments       Investment[]
+  goalContributions GoalContribution[]
+
+  @@unique([userId, period])
+}
+
+model Expense {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetId      String
+  budget        Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  amountMinor   Int
+  spentOn       DateTime @db.Date
+  paymentMethod String
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, spentOn])
+  @@index([userId, budgetId])
+}
+
+model SavingsEntry {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetId    String
+  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  amountMinor Int
+  savedOn     DateTime @default(now())
+  destination String   @default("bank")
+  createdAt   DateTime @default(now())
+
+  @@index([userId, budgetId])
+}
+
+model Goal {
+  id                       String    @id @default(uuid())
+  userId                   String
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title                    String
+  targetMinor              Int
+  savedMinor               Int       @default(0)
+  status                   String    @default("active")
+  icon                     String?
+  targetDate               DateTime? @db.Date
+  monthlyContributionMinor Int?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  contributions GoalContribution[]
+
+  @@index([userId, status])
+}
+
+model GoalContribution {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goalId        String
+  goal          Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  budgetId      String?
+  budget        Budget?  @relation(fields: [budgetId], references: [id], onDelete: SetNull)
+  amountMinor   Int
+  contributedOn DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([userId, goalId])
+}
+
+model Investment {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  budgetId    String
+  budget      Budget   @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  amountMinor Int
+  instrument  String
+  investedOn  DateTime @default(now())
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, budgetId])
+}
