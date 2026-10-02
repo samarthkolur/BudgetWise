@@ -1,5 +1,4 @@
 import 'package:budgetwise/core/providers.dart';
-import 'package:budgetwise/features/budget/domain/models.dart';
 import 'package:budgetwise/features/onboarding/application/onboarding_controller.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,67 +22,39 @@ void main() {
   OnboardingController controller() =>
       container.read(onboardingControllerProvider.notifier);
 
-  test('starts with the default categories summing to 100%', () {
+  test('starts with no income and an empty name', () {
     final state = container.read(onboardingControllerProvider);
 
-    expect(state.totalCategoryPercent, closeTo(100, 0.01));
-    expect(state.isBalanced, isTrue);
+    expect(state.income, const Money.zero());
     expect(state.displayName, isEmpty);
+    expect(state.canSubmit, isFalse);
   });
 
-  test('setCategoryPercent changes only the category it is given', () {
-    final before = container.read(onboardingControllerProvider);
-    final transportBefore = before.categoryPercents['transport'];
-
-    controller().setCategoryPercent('food', 50);
-
-    final after = container.read(onboardingControllerProvider);
-    expect(after.categoryPercents['food'], 50);
-    expect(after.categoryPercents['transport'], transportBefore);
-  });
-
-  test('setCategoryAmount converts a rupee figure to the matching percent', () {
+  test('spendable is income minus the resolved savings target', () {
     controller()
       ..setIncome(const Money(1000000)) // ₹10,000
-      ..setSavingsPercent(0); // spendable == income
-
-    controller().setCategoryAmount('food', const Money(250000)); // ₹2,500
+      ..setSavingsPercent(20);
 
     final state = container.read(onboardingControllerProvider);
-    expect(state.categoryPercents['food'], closeTo(25, 0.01));
+    expect(state.savingsTarget, const Money(200000)); // ₹2,000
+    expect(state.spendable, const Money(800000)); // ₹8,000
   });
 
-  test('setCategoryAmount is a no-op while spendable is zero', () {
-    final before = container
-        .read(onboardingControllerProvider)
-        .categoryPercents['food'];
-
-    controller().setCategoryAmount('food', const Money(1000));
-
-    final after = container
-        .read(onboardingControllerProvider)
-        .categoryPercents['food'];
-    expect(after, before);
-  });
-
-  test('resetToDefaults restores the starting split after edits', () {
-    controller().setCategoryPercent('food', 0);
-
-    controller().resetToDefaults();
+  test('a fixed savings target is used as-is in fixed mode', () {
+    controller()
+      ..setIncome(const Money(1000000))
+      ..setSavingsMode(SavingsMode.fixed)
+      ..setSavingsFixed(const Money(300000)); // ₹3,000
 
     final state = container.read(onboardingControllerProvider);
-    final defaultFood = kDefaultCategories
-        .firstWhere((t) => t.key == 'food')
-        .defaultPercent;
-    expect(state.categoryPercents['food'], defaultFood);
+    expect(state.savingsTarget, const Money(300000));
+    expect(state.spendable, const Money(700000));
   });
 
   test(
-    'setDisplayName is what canSubmit requires along with a balanced, positive plan',
+    'setDisplayName is what canSubmit requires along with a positive income',
     () {
-      controller()
-        ..setIncome(const Money(1000000))
-        ..setSavingsPercent(0);
+      controller().setIncome(const Money(1000000));
 
       expect(container.read(onboardingControllerProvider).canSubmit, isFalse);
 
@@ -92,4 +63,10 @@ void main() {
       expect(container.read(onboardingControllerProvider).canSubmit, isTrue);
     },
   );
+
+  test('canSubmit is false while income is zero, even with a name', () {
+    controller().setDisplayName('Asha');
+
+    expect(container.read(onboardingControllerProvider).canSubmit, isFalse);
+  });
 }

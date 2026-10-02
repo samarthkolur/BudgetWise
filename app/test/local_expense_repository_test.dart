@@ -6,14 +6,6 @@ import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-const _food = CategoryTemplate(
-  key: 'food',
-  name: 'Food',
-  icon: '🍽️',
-  defaultPercent: 100,
-  isEssential: true,
-);
-
 void main() {
   setUpAll(() {
     sqfliteFfiInit();
@@ -23,7 +15,6 @@ void main() {
   late Future<LocalDatabase> dbFuture;
   late LocalExpenseRepository expenses;
   late String budgetId;
-  late String categoryId;
 
   setUp(() async {
     dbFuture = LocalDatabase.open(path: inMemoryDatabasePath);
@@ -36,13 +27,8 @@ void main() {
       savingsMode: SavingsMode.percent,
       savingsTarget: const Money.zero(),
       savingsPercent: 0,
-      allocations: allocateByPercent(
-        total: const Money(1000000),
-        percents: {_food: 100},
-      ),
     );
     budgetId = budget.id;
-    categoryId = (await budgetRepo.categoriesFor(budgetId)).single.id;
   });
 
   // sqflite treats an open path as a live handle rather than opening a fresh
@@ -50,10 +36,9 @@ void main() {
   // would hand back this same database instead of an empty one.
   tearDown(() async => (await dbFuture).db.close());
 
-  test('add creates an expense with its category joined in', () async {
+  test('add creates an expense', () async {
     final expense = await expenses.add(
       budgetId: budgetId,
-      categoryId: categoryId,
       amount: const Money(2500),
       spentOn: DateTime(2026, 8, 12),
       paymentMethod: PaymentMethod.upi,
@@ -61,7 +46,6 @@ void main() {
     );
 
     expect(expense.amount, const Money(2500));
-    expect(expense.categoryName, 'Food');
     expect(expense.note, 'Lunch');
     expect(expense.spentOn, DateTime(2026, 8, 12));
   });
@@ -69,14 +53,12 @@ void main() {
   test('forBudget returns every expense, most recent first', () async {
     await expenses.add(
       budgetId: budgetId,
-      categoryId: categoryId,
       amount: const Money(100),
       spentOn: DateTime(2026, 8),
       paymentMethod: PaymentMethod.cash,
     );
     await expenses.add(
       budgetId: budgetId,
-      categoryId: categoryId,
       amount: const Money(200),
       spentOn: DateTime(2026, 8, 10),
       paymentMethod: PaymentMethod.card,
@@ -90,7 +72,6 @@ void main() {
   test('update changes amount, date, method and note', () async {
     final expense = await expenses.add(
       budgetId: budgetId,
-      categoryId: categoryId,
       amount: const Money(500),
       spentOn: DateTime(2026, 8),
       paymentMethod: PaymentMethod.cash,
@@ -98,7 +79,6 @@ void main() {
 
     final updated = await expenses.update(
       id: expense.id,
-      categoryId: categoryId,
       amount: const Money(750),
       spentOn: DateTime(2026, 8, 2),
       paymentMethod: PaymentMethod.card,
@@ -114,7 +94,6 @@ void main() {
   test('delete removes the expense', () async {
     final expense = await expenses.add(
       budgetId: budgetId,
-      categoryId: categoryId,
       amount: const Money(500),
       spentOn: DateTime(2026, 8),
       paymentMethod: PaymentMethod.cash,

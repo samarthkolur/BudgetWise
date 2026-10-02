@@ -10,8 +10,8 @@ void main() {
   });
 
   testWidgets(
-    'walking all four steps with the default category split reaches the '
-    'dashboard-bound success screen with no exceptions',
+    'walking all four steps reaches the dashboard-bound success screen '
+    'with no exceptions',
     (tester) async {
       await tester.pumpWidget(pumpableApp(child: const OnboardingScreen()));
       await tester.pumpAndSettle();
@@ -34,10 +34,10 @@ void main() {
       await tester.pumpAndSettle();
 
       // Step 2 — savings: defaults are already valid. There is no separate
-      // per-category allocation step any more — the default split
-      // (`kDefaultCategories`) already sums to 100%, and the "deciding
+      // per-category allocation step — the app tracks a plain debit/credit
+      // history rather than pre-allocated categories, so the "deciding
       // savings" screen is the last one before the plan is actually created,
-      // so its own button reads as the finishing action.
+      // and its own button reads as the finishing action.
       expect(find.text('How much will you save first?'), findsOneWidget);
       await tester.tap(find.text('Create my plan'));
       await tester.pumpAndSettle();
