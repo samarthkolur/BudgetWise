@@ -12,23 +12,17 @@ import 'package:share_plus/share_plus.dart';
 /// Everything a month contains, in one object, so the three exporters cannot
 /// disagree about what a month is.
 class MonthExport {
-  const MonthExport({
-    required this.summary,
-    required this.categories,
-    required this.expenses,
-  });
+  const MonthExport({required this.summary, required this.expenses});
 
   final BudgetSummary summary;
-  final List<CategorySpend> categories;
   final List<Expense> expenses;
 }
 
 /// Exports a month as XLSX, CSV or PDF.
 ///
 /// The PRD's "Excel replacement": each file preserves transaction history,
-/// category summaries, monthly statistics, savings information and budget
-/// allocations, so an exported month is a complete record rather than a
-/// screenshot of one screen.
+/// monthly statistics and savings information, so an exported month is a
+/// complete record rather than a screenshot of one screen.
 ///
 /// Amounts are written as rupees with two decimals — not as paise. The internal
 /// representation is an implementation detail, and a spreadsheet full of
@@ -45,7 +39,6 @@ class ExportService {
     final defaultSheet = book.getDefaultSheet();
 
     _buildSummarySheet(book['Summary'], data);
-    _buildCategoriesSheet(book['Categories'], data);
     _buildExpensesSheet(book['Transactions'], data);
 
     // createExcel() seeds a 'Sheet1'; leaving it produces a workbook whose first
@@ -75,11 +68,9 @@ class ExportService {
       ['Invested', _rupees(s.investedActual.minor)],
       [],
       ['Spendable', _rupees(s.spendable.minor)],
-      ['Allocated', _rupees(s.allocated.minor)],
       ['Spent', _rupees(s.spent.minor)],
       ['Remaining', _rupees(s.remaining.minor)],
       [],
-      ['Categories', s.categoryCount],
       ['Transactions', s.expenseCount],
       ['Days with activity', s.daysWithExpenses],
       ['Days in month', s.period.totalDays],
@@ -90,48 +81,15 @@ class ExportService {
     }
   }
 
-  void _buildCategoriesSheet(Sheet sheet, MonthExport data) {
-    sheet.appendRow([
-      for (final header in [
-        'Category',
-        'Allocated %',
-        'Allocated',
-        'Spent',
-        'Remaining',
-        'Over',
-        'Used %',
-        'Entries',
-      ])
-        TextCellValue(header),
-    ]);
-
-    for (final category in data.categories) {
-      final progress = category.progress;
-      sheet.appendRow([
-        TextCellValue(category.name),
-        DoubleCellValue(category.allocatedPercent),
-        DoubleCellValue(_rupees(category.allocated.minor)),
-        DoubleCellValue(_rupees(category.spent.minor)),
-        DoubleCellValue(_rupees(progress.remaining.minor)),
-        DoubleCellValue(_rupees(progress.overspend.minor)),
-        DoubleCellValue(
-          double.parse((progress.ratio * 100).toStringAsFixed(1)),
-        ),
-        IntCellValue(category.expenseCount),
-      ]);
-    }
-  }
-
   void _buildExpensesSheet(Sheet sheet, MonthExport data) {
     sheet.appendRow([
-      for (final header in ['Date', 'Category', 'Amount', 'Method', 'Note'])
+      for (final header in ['Date', 'Amount', 'Method', 'Note'])
         TextCellValue(header),
     ]);
 
     for (final expense in data.expenses) {
       sheet.appendRow([
         TextCellValue(_date.format(expense.spentOn)),
-        TextCellValue(expense.categoryName ?? ''),
         DoubleCellValue(_rupees(expense.amount.minor)),
         TextCellValue(expense.paymentMethod.label),
         TextCellValue(expense.note ?? ''),
@@ -149,8 +107,8 @@ class ExportService {
   Future<File> writeCsv(MonthExport data) async {
     final s = data.summary;
 
-    // One file, three labelled blocks. A CSV cannot have sheets, and splitting
-    // into three files would mean the user has to keep them together
+    // One file, two labelled blocks. A CSV cannot have sheets, and splitting
+    // into separate files would mean the user has to keep them together
     // themselves.
     final rows = <List<Object?>>[
       ['BudgetWise', s.period.label],
@@ -163,24 +121,11 @@ class ExportService {
       ['Spent', _rupees(s.spent.minor)],
       ['Remaining', _rupees(s.remaining.minor)],
       [],
-      ['CATEGORIES'],
-      ['Category', 'Allocated %', 'Allocated', 'Spent', 'Remaining', 'Over'],
-      for (final c in data.categories)
-        [
-          c.name,
-          c.allocatedPercent,
-          _rupees(c.allocated.minor),
-          _rupees(c.spent.minor),
-          _rupees(c.progress.remaining.minor),
-          _rupees(c.progress.overspend.minor),
-        ],
-      [],
       ['TRANSACTIONS'],
-      ['Date', 'Category', 'Amount', 'Method', 'Note'],
+      ['Date', 'Amount', 'Method', 'Note'],
       for (final e in data.expenses)
         [
           _date.format(e.spentOn),
-          e.categoryName ?? '',
           _rupees(e.amount.minor),
           e.paymentMethod.label,
           e.note ?? '',
@@ -202,13 +147,6 @@ class ExportService {
             pw.Header(level: 0, text: 'BudgetWise — ${s.period.label}'),
             pw.SizedBox(height: 8),
             _pdfSummary(s),
-            pw.SizedBox(height: 20),
-            pw.Text(
-              'Categories',
-              style: pw.TextStyle(fontSize: 15, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 6),
-            _pdfCategories(data),
             pw.SizedBox(height: 20),
             pw.Text(
               'Transactions',
@@ -249,25 +187,6 @@ class ExportService {
     );
   }
 
-  pw.Widget _pdfCategories(MonthExport data) {
-    String money(int minor) => 'Rs ${_rupees(minor).toStringAsFixed(2)}';
-
-    return pw.TableHelper.fromTextArray(
-      headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
-      headers: ['Category', 'Allocated', 'Spent', 'Remaining', 'Used'],
-      data: [
-        for (final c in data.categories)
-          [
-            c.name,
-            money(c.allocated.minor),
-            money(c.spent.minor),
-            money(c.progress.remaining.minor),
-            '${(c.progress.ratio * 100).toStringAsFixed(0)}%',
-          ],
-      ],
-    );
-  }
-
   pw.Widget _pdfExpenses(MonthExport data) {
     if (data.expenses.isEmpty) {
       return pw.Text(
@@ -278,12 +197,11 @@ class ExportService {
 
     return pw.TableHelper.fromTextArray(
       headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
-      headers: ['Date', 'Category', 'Amount', 'Method', 'Note'],
+      headers: ['Date', 'Amount', 'Method', 'Note'],
       data: [
         for (final e in data.expenses)
           [
             _date.format(e.spentOn),
-            e.categoryName ?? '',
             'Rs ${_rupees(e.amount.minor).toStringAsFixed(2)}',
             e.paymentMethod.label,
             e.note ?? '',

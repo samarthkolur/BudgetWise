@@ -28,9 +28,7 @@ class Insight {
 /// matters more than one they cannot.
 List<Insight> generateInsights({
   required BudgetSummary summary,
-  required List<CategorySpend> categories,
   List<BudgetSummary> history = const [],
-  List<CategorySpend> lastMonthCategories = const [],
   DateTime? now,
 }) {
   final insights = <Insight>[];
@@ -73,61 +71,7 @@ List<Insight> generateInsights({
     }
   }
 
-  // 2. Categories approaching or past their limit.
-  for (final category in categories) {
-    final progress = category.progress;
-    if (progress.isExceeded) {
-      insights.add(
-        Insight(
-          kind: 'category_exceeded',
-          tone: InsightTone.warning,
-          title: '${category.name} is over budget',
-          body:
-              '${progress.overspend.formatCompact()} past its '
-              '${category.allocated.formatCompact()} allocation.',
-        ),
-      );
-    } else if (progress.status == CategoryStatus.warning && daysLeft > 3) {
-      insights.add(
-        Insight(
-          kind: 'category_warning',
-          tone: InsightTone.warning,
-          title:
-              '${category.name} is at ${(progress.ratio * 100).toStringAsFixed(0)}%',
-          body:
-              '${progress.remaining.formatCompact()} left with $daysLeft '
-              '${daysLeft == 1 ? "day" : "days"} to go.',
-        ),
-      );
-    }
-  }
-
-  // 3. Month-on-month movement, only where it is large enough to mean something.
-  if (lastMonthCategories.isNotEmpty) {
-    final previous = {for (final c in lastMonthCategories) c.key: c.spent};
-    for (final category in categories) {
-      final before = previous[category.key];
-      if (before == null || before.isZero || category.spent.isZero) continue;
-
-      final change = (category.spent.minor - before.minor) / before.minor;
-      if (change.abs() < 0.25) continue;
-
-      insights.add(
-        Insight(
-          kind: 'category_trend',
-          tone: change > 0 ? InsightTone.info : InsightTone.celebration,
-          title:
-              '${category.name} is ${change > 0 ? "up" : "down"} '
-              '${(change.abs() * 100).toStringAsFixed(0)}%',
-          body:
-              '${category.spent.formatCompact()} this month against '
-              '${before.formatCompact()} last month.',
-        ),
-      );
-    }
-  }
-
-  // 4. Savings — the behaviour the product exists to build, so it is called out
+  // 2. Savings — the behaviour the product exists to build, so it is called out
   //    whether or not it went well.
   if (!summary.savingsTarget.isZero) {
     if (summary.savingsOutstanding.isZero) {
@@ -155,7 +99,7 @@ List<Insight> generateInsights({
     }
   }
 
-  // 5. Logging consistency. The app can only help with money it hears about.
+  // 3. Logging consistency. The app can only help with money it hears about.
   if (daysElapsed >= 7) {
     final loggedRatio = summary.daysWithExpenses / daysElapsed;
     if (loggedRatio < 0.3) {
@@ -172,7 +116,7 @@ List<Insight> generateInsights({
     }
   }
 
-  // 6. A quiet month with nothing to report still gets one line, because an
+  // 4. A quiet month with nothing to report still gets one line, because an
   //    empty insights screen looks broken.
   if (insights.isEmpty) {
     insights.add(

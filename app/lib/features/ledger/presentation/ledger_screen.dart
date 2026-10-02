@@ -1,8 +1,6 @@
 import 'package:budgetwise/core/providers.dart';
-import 'package:budgetwise/core/router/routes.dart';
 import 'package:budgetwise/core/theme/app_theme.dart';
 import 'package:budgetwise/core/theme/app_typography.dart';
-import 'package:budgetwise/core/theme/category_icons.dart';
 import 'package:budgetwise/core/widgets/async_view.dart';
 import 'package:budgetwise/core/widgets/bento.dart';
 import 'package:budgetwise/core/widgets/motion.dart';
@@ -12,7 +10,6 @@ import 'package:budgetwise/features/export/data/export_service.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 /// The monthly ledger: income, savings, allocations, every transaction, and the
@@ -152,7 +149,6 @@ class _LedgerBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final categories = ref.watch(categoriesProvider(summary.budgetId));
     final expenses = ref.watch(expensesProvider(summary.budgetId));
 
     final spentRatio = (summary.spent.ratioOf(summary.spendable) * 100)
@@ -258,77 +254,6 @@ class _LedgerBody extends ConsumerWidget {
         ),
 
         Gap.h28,
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Allocations', style: theme.textTheme.titleMedium),
-            OutlinedButton.icon(
-              onPressed: () => context.push(Routes.insights),
-              style: OutlinedButton.styleFrom(
-                shape: const RoundedRectangleBorder(),
-                minimumSize: const Size(0, 36),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                visualDensity: VisualDensity.compact,
-              ),
-              icon: const Icon(Icons.trending_up_rounded, size: 16),
-              label: const Text('View insights'),
-            ),
-          ],
-        ),
-        Gap.h12,
-        AsyncView(
-          value: categories,
-          loading: const LinearProgressIndicator(),
-          builder: (list) => Container(
-            padding: const EdgeInsets.symmetric(horizontal: Gap.lg),
-            decoration: AppTheme.card(scheme),
-            child: ListSection(
-              children: [
-                for (final category in list)
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    leading: IconBadge(
-                      icon: categoryIconFor(category.key),
-                      size: 34,
-                      iconSize: 16,
-                    ),
-                    title: Text(category.name),
-                    subtitle: Text(
-                      '${category.spent.formatCompact()} of ${category.allocated.formatCompact()}',
-                    ),
-                    trailing: Text(
-                      category.progress.isExceeded
-                          ? '−${category.progress.overspend.formatCompact()}'
-                          : category.progress.remaining.formatCompact(),
-                      style: theme.textTheme.bodyMedium?.money.copyWith(
-                        color: category.progress.isExceeded
-                            ? theme.colorScheme.error
-                            : null,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        Gap.h16,
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              size: 13,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            Gap.w4,
-            Text(
-              'All amounts are from your current budget settings.',
-              style: theme.textTheme.labelSmall,
-            ),
-          ],
-        ),
-        Gap.h28,
         const SectionHeader(title: 'Transactions'),
         AsyncView(
           value: expenses,
@@ -427,7 +352,7 @@ class _ExpenseTile extends ConsumerWidget {
           builder: (context) => AlertDialog(
             title: const Text('Delete this expense?'),
             content: Text(
-              '${expense.amount.format()} · ${expense.categoryName ?? "Uncategorised"}',
+              '${expense.amount.format()} · ${DateFormat('d MMM').format(expense.spentOn)}',
             ),
             actions: [
               TextButton(
@@ -455,15 +380,11 @@ class _ExpenseTile extends ConsumerWidget {
       child: ListTile(
         contentPadding: EdgeInsets.zero,
         title: Text(
-          expense.note?.isNotEmpty ?? false
-              ? expense.note!
-              : expense.categoryName ?? 'Expense',
+          expense.note?.isNotEmpty ?? false ? expense.note! : 'Expense',
         ),
         subtitle: Text(
           [
             DateFormat('d MMM').format(expense.spentOn),
-            if (expense.note?.isNotEmpty ?? false)
-              expense.categoryName ?? 'Uncategorised',
             expense.paymentMethod.label,
           ].join(' · '),
         ),
@@ -481,7 +402,7 @@ enum _ExportFormat {
   xlsx(
     'Excel workbook',
     Icons.table_chart_outlined,
-    'Three sheets: summary, categories, transactions',
+    'Two sheets: summary, transactions',
   ),
   csv('CSV', Icons.description_outlined, 'One file, opens anywhere'),
   pdf(
@@ -507,17 +428,10 @@ Future<void> _runExport(
     ..showSnackBar(SnackBar(content: Text('Preparing ${format.label}…')));
 
   try {
-    final categories = await ref
-        .read(budgetRepositoryProvider)
-        .categoriesFor(summary.budgetId);
     final expenses = await ref
         .read(expenseRepositoryProvider)
         .forBudget(summary.budgetId);
-    final data = MonthExport(
-      summary: summary,
-      categories: categories,
-      expenses: expenses,
-    );
+    final data = MonthExport(summary: summary, expenses: expenses);
 
     const service = ExportService();
     final file = switch (format) {

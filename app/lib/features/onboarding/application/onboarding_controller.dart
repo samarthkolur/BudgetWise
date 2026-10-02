@@ -17,7 +17,6 @@ class OnboardingState {
     this.savingsMode = SavingsMode.percent,
     this.savingsPercent = 20,
     this.savingsFixed = const Money.zero(),
-    this.categoryPercents = const {},
     this.carriedFrom,
     this.isSubmitting = false,
   });
@@ -29,9 +28,6 @@ class OnboardingState {
   final double savingsPercent;
   final Money savingsFixed;
 
-  /// category key -> percent of spendable income.
-  final Map<String, double> categoryPercents;
-
   final Period? carriedFrom;
   final bool isSubmitting;
 
@@ -42,40 +38,16 @@ class OnboardingState {
     percent: savingsPercent,
   );
 
-  /// What is left to divide among categories. Recomputed on every keystroke and
-  /// slider move, which is the PRD's "the interface instantly demonstrates how
-  /// savings affect available spending money".
+  /// What is left once savings are set aside — the PRD's "the interface
+  /// instantly demonstrates how savings affect available spending money".
+  /// There is no further split below this: everything left is simply
+  /// spendable, tracked as a running debit/credit history rather than
+  /// pre-allocated into categories.
   Money get spendable =>
       spendableIncome(income: income, savingsTarget: savingsTarget);
 
-  double get totalCategoryPercent =>
-      categoryPercents.values.fold<double>(0, (a, b) => a + b);
-
-  /// Percentage points still unassigned. Negative means over-allocated.
-  double get remainingPercent =>
-      double.parse((100 - totalCategoryPercent).toStringAsFixed(2));
-
-  bool get isBalanced => remainingPercent.abs() < 0.01;
-
   bool get canSubmit =>
-      displayName.trim().isNotEmpty &&
-      income.isPositive &&
-      isBalanced &&
-      !isSubmitting;
-
-  /// The concrete split, using largest-remainder so the parts sum to exactly
-  /// [spendable]. The database refuses anything else.
-  List<Allocation<CategoryTemplate>> get allocations {
-    final templates = {for (final t in kDefaultCategories) t.key: t};
-    final percents = <CategoryTemplate, double>{
-      for (final entry in categoryPercents.entries)
-        if (templates[entry.key] != null) templates[entry.key]!: entry.value,
-    };
-    return allocateByPercent(total: spendable, percents: percents);
-  }
-
-  Money amountFor(String categoryKey) =>
-      spendable.percent(categoryPercents[categoryKey] ?? 0);
+      displayName.trim().isNotEmpty && income.isPositive && !isSubmitting;
 
   OnboardingState copyWith({
     String? displayName,
@@ -83,7 +55,6 @@ class OnboardingState {
     SavingsMode? savingsMode,
     double? savingsPercent,
     Money? savingsFixed,
-    Map<String, double>? categoryPercents,
     Period? carriedFrom,
     bool? isSubmitting,
   }) => OnboardingState(
@@ -93,7 +64,6 @@ class OnboardingState {
     savingsMode: savingsMode ?? this.savingsMode,
     savingsPercent: savingsPercent ?? this.savingsPercent,
     savingsFixed: savingsFixed ?? this.savingsFixed,
-    categoryPercents: categoryPercents ?? this.categoryPercents,
     carriedFrom: carriedFrom ?? this.carriedFrom,
     isSubmitting: isSubmitting ?? this.isSubmitting,
   );
@@ -106,10 +76,6 @@ class OnboardingController extends Notifier<OnboardingState> {
     // Pre-filled when a name already exists (a signed-in Google account) so
     // the step only asks for what it doesn't already know.
     displayName: ref.read(profileProvider).value?.displayName ?? '',
-    categoryPercents: {
-      for (final template in kDefaultCategories)
-        template.key: template.defaultPercent,
-    },
   );
 
   void setDisplayName(String value) =>
@@ -126,52 +92,15 @@ class OnboardingController extends Notifier<OnboardingState> {
   void setSavingsFixed(Money amount) =>
       state = state.copyWith(savingsFixed: amount);
 
-  /// Moves one category and nothing else.
-  ///
-  /// Earlier versions of this screen absorbed the change proportionally
-  /// across every other category, so dragging one slider visibly moved eight
-  /// others at once — precise entry was impossible and the result felt
-  /// unpredictable. A category is a tag you turn on and set an amount for,
-  /// not a cell in a spreadsheet that recalculates its neighbours. The
-  /// remaining-to-assign banner is what tells the user where they stand, the
-  /// same way it always has; getting to zero is now something they do on
-  /// purpose rather than something that happens as a side effect of touching
-  /// something else.
-  void setCategoryPercent(String key, double percent) {
-    final next = Map<String, double>.from(state.categoryPercents);
-    next[key] = double.parse(percent.clamp(0.0, 100.0).toStringAsFixed(2));
-    state = state.copyWith(categoryPercents: next);
-  }
-
-  /// Sets a category directly from a typed rupee amount rather than a
-  /// percentage — the two are the same number, expressed the way the user
-  /// happened to think of it.
-  void setCategoryAmount(String key, Money amount) {
-    if (state.spendable.isZero) return;
-    setCategoryPercent(key, amount.ratioOf(state.spendable) * 100);
-  }
-
-  /// Reuses last month's split. Percentages carry; amounts do not — they are
-  /// re-derived from the new income, which is the whole point of storing both.
-  void adoptPrevious(MonthlyBudget previous, List<CategorySpend> categories) {
+  /// Reuses last month's savings split. There is nothing else to adopt —
+  /// without categories, the only thing one month hands the next is how
+  /// much to save first.
+  void adoptPrevious(MonthlyBudget previous) {
     state = state.copyWith(
       savingsMode: previous.savingsMode,
       savingsPercent: previous.savingsPercent ?? state.savingsPercent,
       savingsFixed: previous.savingsTarget,
-      categoryPercents: {
-        for (final category in categories)
-          category.key: category.allocatedPercent,
-      },
       carriedFrom: previous.period,
-    );
-  }
-
-  void resetToDefaults() {
-    state = state.copyWith(
-      categoryPercents: {
-        for (final template in kDefaultCategories)
-          template.key: template.defaultPercent,
-      },
     );
   }
 
@@ -190,7 +119,6 @@ class OnboardingController extends Notifier<OnboardingState> {
             savingsPercent: state.savingsMode == SavingsMode.percent
                 ? state.savingsPercent
                 : null,
-            allocations: state.allocations,
             carriedFrom: state.carriedFrom,
           );
       await ref

@@ -52,34 +52,31 @@ class _InsightsBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider(summary.budgetId));
     final unlock = ref.watch(investingStatusProvider);
 
-    return AsyncView(
-      value: categories,
-      onRetry: () => ref.invalidate(categoriesProvider),
-      builder: (list) {
-        final score = computeHealthScore(
-          HealthScoreInput(
-            savingsTarget: summary.savingsTarget,
-            savingsActual: summary.savedActual,
-            totalAllocated: summary.allocated,
-            totalSpent: summary.spent,
-            categoriesExceeded: list.where((c) => c.progress.isExceeded).length,
-            categoryCount: list.length,
-            daysWithExpenses: summary.daysWithExpenses,
-            daysElapsed: summary.period.daysElapsed(),
-            investingUnlocked: unlock.value?.isUnlocked ?? false,
-            investmentTarget: summary.investmentTarget ?? const Money.zero(),
-            investmentActual: summary.investedActual,
-          ),
-        );
+    // No per-category allocations exist any more (CLAUDE.md: categories were
+    // removed in favour of a plain debit/credit history), so the overspend
+    // component of the score has nothing to measure — it contributes neither
+    // penalty nor bonus.
+    final score = computeHealthScore(
+      HealthScoreInput(
+        savingsTarget: summary.savingsTarget,
+        savingsActual: summary.savedActual,
+        totalAllocated: summary.spendable,
+        totalSpent: summary.spent,
+        categoriesExceeded: 0,
+        categoryCount: 0,
+        daysWithExpenses: summary.daysWithExpenses,
+        daysElapsed: summary.period.daysElapsed(),
+        investingUnlocked: unlock.value?.isUnlocked ?? false,
+        investmentTarget: summary.investmentTarget ?? const Money.zero(),
+        investmentActual: summary.investedActual,
+      ),
+    );
 
-        return ListView(
-          padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.xl, Gap.lg, Gap.xxl),
-          children: [_HealthScoreCard(score: score)],
-        );
-      },
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(Gap.lg, Gap.xl, Gap.lg, Gap.xxl),
+      children: [_HealthScoreCard(score: score)],
     );
   }
 }
