@@ -9,7 +9,6 @@ import 'package:budgetwise/core/widgets/score_ring.dart';
 import 'package:budgetwise/features/auth/data/profile_repository.dart';
 import 'package:budgetwise/features/auth/domain/profile.dart';
 import 'package:budgetwise/features/budget/domain/models.dart';
-import 'package:budgetwise/features/dashboard/presentation/widgets/category_card.dart';
 import 'package:budgetwise/features/dashboard/presentation/widgets/savings_reminder_card.dart';
 import 'package:budgetwise/features/expenses/presentation/expense_sheet.dart';
 import 'package:budgetwise_domain/budgetwise_domain.dart';
@@ -130,7 +129,6 @@ class _DashboardBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
-    final categories = ref.watch(categoriesProvider(summary.budgetId));
     final expenses = ref.watch(expensesProvider(summary.budgetId));
     final unlock = ref.watch(investingStatusProvider).value;
 
@@ -177,76 +175,33 @@ class _DashboardBody extends ConsumerWidget {
         ],
 
         Gap.h16,
-        AsyncView(
-          value: categories,
-          loading: const SizedBox.shrink(),
-          builder: (list) => _HealthScoreRow(
-            summary: summary,
-            categories: list,
-            unlock: unlock,
-          ),
-        ),
+        _HealthScoreRow(summary: summary, unlock: unlock),
 
         Gap.h28,
         AsyncView(
-          value: categories,
-          loading: const _CategorySkeleton(),
-          onRetry: () => ref.invalidate(categoriesProvider),
+          value: expenses,
+          loading: const _HistorySkeleton(),
+          onRetry: () => ref.invalidate(expensesProvider),
           builder: (list) {
             if (list.isEmpty) {
               return const Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SectionHeader(title: 'Spending categories'),
+                  SectionHeader(title: 'Expenditure history'),
                   EmptyView(
-                    icon: Icons.category_outlined,
-                    title: 'No categories',
-                    message: 'This month has no spending categories yet.',
+                    icon: Icons.receipt_long_outlined,
+                    title: 'No expenses yet',
+                    message: 'Log one with the add button below.',
                   ),
                 ],
               );
             }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SectionHeader(title: 'Spending categories'),
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: Gap.md,
-                  mainAxisSpacing: Gap.md,
-                  childAspectRatio: 1.5,
-                  children: [
-                    for (final category in list)
-                      CategoryCard(
-                        category: category,
-                        onTap: () => showExpenseSheet(
-                          context,
-                          ref,
-                          summary.budgetId,
-                          preselectedCategoryId: category.id,
-                        ),
-                      ),
-                  ],
-                ),
-              ],
-            );
-          },
-        ),
-
-        Gap.h28,
-        AsyncView(
-          value: expenses,
-          loading: const SizedBox.shrink(),
-          builder: (list) {
-            if (list.isEmpty) return const SizedBox.shrink();
-            final recent = list.take(3).toList();
+            final recent = list.take(6).toList();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SectionHeader(
-                  title: 'Recent activity',
+                  title: 'Expenditure history',
                   trailing: 'View ledger',
                   action: () => context.go(Routes.ledger),
                 ),
@@ -392,14 +347,9 @@ class _InvestTeaserCard extends StatelessWidget {
 
 /// A compact, tappable row into the merged health-and-insights screen.
 class _HealthScoreRow extends StatelessWidget {
-  const _HealthScoreRow({
-    required this.summary,
-    required this.categories,
-    required this.unlock,
-  });
+  const _HealthScoreRow({required this.summary, required this.unlock});
 
   final BudgetSummary summary;
-  final List<CategorySpend> categories;
   final UnlockClaim? unlock;
 
   @override
@@ -410,12 +360,14 @@ class _HealthScoreRow extends StatelessWidget {
       HealthScoreInput(
         savingsTarget: summary.savingsTarget,
         savingsActual: summary.savedActual,
-        totalAllocated: summary.allocated,
+        // No per-category sub-budget any more — the whole spendable amount
+        // is the one ceiling, and there is nothing left to "exceed" below
+        // it, so the category-adherence component of the score contributes
+        // full marks honestly rather than being faked.
+        totalAllocated: summary.spendable,
         totalSpent: summary.spent,
-        categoriesExceeded: categories
-            .where((c) => c.progress.isExceeded)
-            .length,
-        categoryCount: categories.length,
+        categoriesExceeded: 0,
+        categoryCount: 0,
         daysWithExpenses: summary.daysWithExpenses,
         daysElapsed: summary.period.daysElapsed(),
         investingUnlocked: unlock?.isUnlocked ?? false,
@@ -475,14 +427,12 @@ class _RecentExpenseRow extends ConsumerWidget {
       contentPadding: EdgeInsets.zero,
       dense: true,
       title: Text(
-        expense.note?.isNotEmpty ?? false
-            ? expense.note!
-            : expense.categoryName ?? 'Expense',
+        expense.note?.isNotEmpty ?? false ? expense.note! : 'Expense',
       ),
       subtitle: Text(
         [
           DateFormat('d MMM').format(expense.spentOn),
-          expense.categoryName ?? 'Uncategorised',
+          expense.paymentMethod.label,
         ].join(' · '),
       ),
       trailing: Text(
@@ -494,25 +444,15 @@ class _RecentExpenseRow extends ConsumerWidget {
   }
 }
 
-class _CategorySkeleton extends StatelessWidget {
-  const _CategorySkeleton();
+class _HistorySkeleton extends StatelessWidget {
+  const _HistorySkeleton();
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: Gap.md,
-      mainAxisSpacing: Gap.md,
-      childAspectRatio: 1.5,
-      children: [
-        for (var i = 0; i < 4; i++)
-          Container(
-            decoration: AppTheme.card(scheme),
-          ),
-      ],
+    return Container(
+      height: 220,
+      decoration: AppTheme.card(scheme),
     );
   }
 }

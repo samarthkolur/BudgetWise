@@ -1,94 +1,5 @@
 import 'package:budgetwise_domain/budgetwise_domain.dart';
 
-/// The nine categories a new month starts with.
-///
-/// Held as data rather than an enum so a user-defined category (`custom:<slug>`)
-/// is representable without a schema change, and so the default split can be
-/// tuned without touching any type. The percentages are a starting point the
-/// user immediately adjusts, not advice — they sum to 100.
-class CategoryTemplate {
-  const CategoryTemplate({
-    required this.key,
-    required this.name,
-    required this.icon,
-    required this.defaultPercent,
-    this.isEssential = false,
-  });
-
-  final String key;
-  final String name;
-  final String icon;
-  final double defaultPercent;
-
-  /// Counted toward the emergency-fund calculation. These are the categories a
-  /// person cannot simply stop paying, which is what makes three months of them
-  /// a meaningful cushion.
-  final bool isEssential;
-}
-
-const kDefaultCategories = <CategoryTemplate>[
-  CategoryTemplate(
-    key: 'food',
-    name: 'Food',
-    icon: '🍽️',
-    defaultPercent: 30,
-    isEssential: true,
-  ),
-  CategoryTemplate(
-    key: 'transport',
-    name: 'Transport',
-    icon: '🚌',
-    defaultPercent: 12,
-    isEssential: true,
-  ),
-  CategoryTemplate(
-    key: 'bills',
-    name: 'Bills',
-    icon: '🧾',
-    defaultPercent: 20,
-    isEssential: true,
-  ),
-  CategoryTemplate(
-    key: 'healthcare',
-    name: 'Healthcare',
-    icon: '💊',
-    defaultPercent: 5,
-    isEssential: true,
-  ),
-  CategoryTemplate(
-    key: 'shopping',
-    name: 'Shopping',
-    icon: '🛍️',
-    defaultPercent: 10,
-  ),
-  CategoryTemplate(
-    key: 'entertainment',
-    name: 'Entertainment',
-    icon: '🎬',
-    defaultPercent: 8,
-  ),
-  CategoryTemplate(
-    key: 'subscriptions',
-    name: 'Subscriptions',
-    icon: '📺',
-    defaultPercent: 5,
-  ),
-  CategoryTemplate(
-    key: 'education',
-    name: 'Education',
-    icon: '📚',
-    defaultPercent: 5,
-  ),
-  CategoryTemplate(
-    key: 'misc',
-    name: 'Miscellaneous',
-    icon: '✨',
-    defaultPercent: 5,
-  ),
-];
-
-const kEssentialCategoryKeys = {'food', 'transport', 'bills', 'healthcare'};
-
 /// A month's plan.
 class MonthlyBudget {
   const MonthlyBudget({
@@ -150,54 +61,6 @@ class MonthlyBudget {
   );
 }
 
-/// One category's allocation and what has been spent against it.
-///
-/// Built from `v_category_spend`, so the allocated and spent figures come from
-/// the same query and cannot disagree.
-class CategorySpend {
-  const CategorySpend({
-    required this.id,
-    required this.budgetId,
-    required this.key,
-    required this.name,
-    required this.icon,
-    required this.allocated,
-    required this.spent,
-    required this.allocatedPercent,
-    required this.expenseCount,
-    required this.sortOrder,
-  });
-
-  factory CategorySpend.fromJson(Map<String, dynamic> json) => CategorySpend(
-    id: json['categoryId'] as String,
-    budgetId: json['budgetId'] as String,
-    key: json['categoryKey'] as String,
-    name: json['displayName'] as String,
-    icon: json['icon'] as String? ?? '•',
-    allocated: Money((json['allocatedMinor'] as num).toInt()),
-    spent: Money((json['spentMinor'] as num).toInt()),
-    allocatedPercent: (json['allocatedPercent'] as num?)?.toDouble() ?? 0,
-    expenseCount: (json['expenseCount'] as num?)?.toInt() ?? 0,
-    sortOrder: (json['sortOrder'] as num?)?.toInt() ?? 0,
-  );
-
-  final String id;
-  final String budgetId;
-  final String key;
-  final String name;
-  final String icon;
-  final Money allocated;
-  final Money spent;
-  final double allocatedPercent;
-  final int expenseCount;
-  final int sortOrder;
-
-  CategoryProgress get progress =>
-      CategoryProgress(allocated: allocated, spent: spent);
-
-  bool get isEssential => kEssentialCategoryKeys.contains(key);
-}
-
 /// The dashboard header, from `v_budget_summary`.
 class BudgetSummary {
   const BudgetSummary({
@@ -206,12 +69,10 @@ class BudgetSummary {
     required this.income,
     required this.savingsTarget,
     required this.savedActual,
-    required this.allocated,
     required this.spent,
     required this.spendable,
     required this.remaining,
     required this.investedActual,
-    required this.categoryCount,
     required this.expenseCount,
     required this.daysWithExpenses,
     required this.savingsConfirmedAt,
@@ -224,12 +85,10 @@ class BudgetSummary {
     income: Money((json['incomeMinor'] as num).toInt()),
     savingsTarget: Money((json['savingsTargetMinor'] as num).toInt()),
     savedActual: Money((json['savedMinor'] as num).toInt()),
-    allocated: Money((json['allocatedMinor'] as num).toInt()),
     spent: Money((json['spentMinor'] as num).toInt()),
     spendable: Money((json['spendableMinor'] as num).toInt()),
     remaining: Money((json['remainingMinor'] as num).toInt()),
     investedActual: Money((json['investedMinor'] as num).toInt()),
-    categoryCount: (json['categoryCount'] as num).toInt(),
     expenseCount: (json['expenseCount'] as num).toInt(),
     daysWithExpenses: (json['daysWithExpenses'] as num).toInt(),
     savingsConfirmedAt: json['savingsConfirmedAt'] == null
@@ -245,13 +104,11 @@ class BudgetSummary {
   final Money income;
   final Money savingsTarget;
   final Money savedActual;
-  final Money allocated;
   final Money spent;
   final Money spendable;
   final Money remaining;
   final Money investedActual;
   final Money? investmentTarget;
-  final int categoryCount;
   final int expenseCount;
   final int daysWithExpenses;
   final DateTime? savingsConfirmedAt;
@@ -266,48 +123,38 @@ class BudgetSummary {
       safeDailySpend(remaining: remaining, period: period, now: now);
 }
 
-/// A recorded expense.
+/// A recorded expense — a single debit, with no category. The history is
+/// the categorisation: what it was and when, not which bucket it counted
+/// against.
 class Expense {
   const Expense({
     required this.id,
     required this.budgetId,
-    required this.categoryId,
     required this.amount,
     required this.spentOn,
     required this.paymentMethod,
     this.note,
-    this.categoryName,
-    this.categoryIcon,
   });
 
   factory Expense.fromJson(Map<String, dynamic> json) {
-    final category = json['category'] as Map<String, dynamic>?;
     return Expense(
       id: json['id'] as String,
       budgetId: json['budgetId'] as String,
-      categoryId: json['categoryId'] as String,
       amount: Money((json['amountMinor'] as num).toInt()),
       spentOn: DateTime.parse(json['spentOn'] as String),
       paymentMethod: PaymentMethod.fromDb(
         json['paymentMethod'] as String? ?? 'upi',
       ),
       note: json['note'] as String?,
-      categoryName: category?['displayName'] as String?,
-      categoryIcon: category?['icon'] as String?,
     );
   }
 
   final String id;
   final String budgetId;
-  final String categoryId;
   final Money amount;
   final DateTime spentOn;
   final PaymentMethod paymentMethod;
   final String? note;
-
-  /// Populated when the row was fetched with its category joined.
-  final String? categoryName;
-  final String? categoryIcon;
 }
 
 enum PaymentMethod {

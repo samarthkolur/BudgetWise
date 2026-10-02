@@ -17,7 +17,6 @@ Future<void> showExpenseSheet(
   BuildContext context,
   WidgetRef ref,
   String budgetId, {
-  String? preselectedCategoryId,
   Expense? editing,
 }) {
   return showModalBottomSheet<void>(
@@ -28,24 +27,15 @@ Future<void> showExpenseSheet(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: _ExpenseSheet(
-        budgetId: budgetId,
-        preselectedCategoryId: preselectedCategoryId,
-        editing: editing,
-      ),
+      child: _ExpenseSheet(budgetId: budgetId, editing: editing),
     ),
   );
 }
 
 class _ExpenseSheet extends ConsumerStatefulWidget {
-  const _ExpenseSheet({
-    required this.budgetId,
-    this.preselectedCategoryId,
-    this.editing,
-  });
+  const _ExpenseSheet({required this.budgetId, this.editing});
 
   final String budgetId;
-  final String? preselectedCategoryId;
   final Expense? editing;
 
   @override
@@ -56,7 +46,6 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
   late final TextEditingController _amount;
   late final TextEditingController _note;
 
-  String? _categoryId;
   late DateTime _date;
   late PaymentMethod _method;
   bool _busy = false;
@@ -72,7 +61,6 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
       text: editing == null ? '' : editing.amount.asRupees.toStringAsFixed(2),
     );
     _note = TextEditingController(text: editing?.note ?? '');
-    _categoryId = editing?.categoryId ?? widget.preselectedCategoryId;
     _date = editing?.spentOn ?? DateTime.now();
     _method = editing?.paymentMethod ?? PaymentMethod.upi;
   }
@@ -90,7 +78,6 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
       setState(() => _amountError = 'Enter an amount greater than zero');
       return;
     }
-    if (_categoryId == null) return;
 
     setState(() {
       _busy = true;
@@ -102,7 +89,6 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
       if (_isEditing) {
         await repository.update(
           id: widget.editing!.id,
-          categoryId: _categoryId!,
           amount: amount,
           spentOn: _date,
           paymentMethod: _method,
@@ -111,7 +97,6 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
       } else {
         await repository.add(
           budgetId: widget.budgetId,
-          categoryId: _categoryId!,
           amount: amount,
           spentOn: _date,
           paymentMethod: _method,
@@ -144,27 +129,14 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final categories = ref.watch(categoriesProvider(widget.budgetId));
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      // Scrollable, not just a fixed Column: with the keyboard open, the
-      // available height can end up smaller than the content's natural
-      // height (a category list that wraps to three rows, for instance),
-      // and a bare Column has nowhere to put the overflow.
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Container(
-                height: 4,
-                width: 40,
-                color: theme.colorScheme.outlineVariant,
-              ),
-            ),
-            const SizedBox(height: 18),
             Text(
               _isEditing ? 'Edit expense' : 'Add expense',
               style: theme.textTheme.titleMedium,
@@ -199,35 +171,6 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
               ),
             ),
             const SizedBox(height: 22),
-
-            Text('Category', style: theme.textTheme.labelLarge),
-            const SizedBox(height: 8),
-            AsyncView(
-              value: categories,
-              loading: const SizedBox(
-                height: 44,
-                child: Center(child: LinearProgressIndicator()),
-              ),
-              builder: (list) => Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final category in list)
-                    ChoiceChip(
-                      label: Text(category.name),
-                      labelStyle: _categoryId == category.id
-                          ? theme.textTheme.labelMedium?.copyWith(
-                              color: theme.colorScheme.onPrimary,
-                            )
-                          : null,
-                      selected: _categoryId == category.id,
-                      onSelected: (_) =>
-                          setState(() => _categoryId = category.id),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 18),
 
             Row(
               children: [
@@ -271,7 +214,7 @@ class _ExpenseSheetState extends ConsumerState<_ExpenseSheet> {
 
             PressableScale(
               child: FilledButton(
-                onPressed: _busy || _categoryId == null ? null : _save,
+                onPressed: _busy ? null : _save,
                 child: _busy
                     ? const SizedBox(
                         height: 22,
