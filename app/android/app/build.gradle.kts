@@ -1,8 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Real upload keystore + passwords live in key.properties, which is gitignored
+// (see key.properties.example for the format). A fresh clone with no
+// key.properties yet still builds — release just falls back to debug signing,
+// the same "no secret, no crash" pattern as config/*.json and server/.env.
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
 }
 
 android {
@@ -45,15 +58,36 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Debug keys, so `flutter run --release` works locally.
-            //
-            // Release signing is Phase 8 and is deliberately NOT configured
-            // here: the upload keystore must not live in this repository, and
-            // its SHA-1 has to be registered on the Google Android OAuth client
-            // or sign-in works in debug and fails in production.
-            signingConfig = signingConfigs.getByName("debug")
+            // Falls back to the debug cert only when key.properties is absent
+            // (a fresh clone with no keystore yet). A debug-signed APK is what
+            // got this build blocked by Play Protect on a second device, so
+            // once key.properties exists this must resolve to "release", not
+            // "debug" — confirm with `apksigner verify --print-certs` after a
+            // build, don't just assume the gradle wiring took.
+            signingConfig = if (hasReleaseKeystore) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

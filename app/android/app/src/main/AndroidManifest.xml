@@ -1,8 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Opt-in, off by default (see the "Detect expenses from SMS" Settings
+         toggle) — used only to read the on-device SMS inbox for bank/UPI
+         debit alerts. Nothing is transmitted off the device. -->
+    <uses-permission android:name="android.permission.READ_SMS"/>
     <application
         android:label="budgetwise"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
